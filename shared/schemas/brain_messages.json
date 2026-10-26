@@ -1,0 +1,215 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BrainToHostMessages",
+  "description": "Messages sent from Python Brain to Electron Host",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "session_start" },
+        "version": { "type": "string" },
+        "active_model": { "type": "string" }
+      },
+      "required": ["type", "version", "active_model"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "listening_start" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "listening_level" },
+        "level": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      },
+      "required": ["type", "level"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "listening_end" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "transcript" },
+        "text": { "type": "string" },
+        "is_final": { "type": "boolean" }
+      },
+      "required": ["type", "text", "is_final"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "thinking_start" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "thinking_tick" },
+        "elapsed_sec": { "type": "number", "minimum": 0 }
+      },
+      "required": ["type", "elapsed_sec"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "thinking_end" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "assistant_delta" },
+        "text": { "type": "string" }
+      },
+      "required": ["type", "text"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "assistant_message" },
+        "text": { "type": "string" },
+        "face": {
+          "type": "string",
+          "enum": ["calm", "aside", "smug", "wide", "look", "laugh", "many", "grin"]
+        },
+        "badge": { "type": "string" }
+      },
+      "required": ["type", "text", "face"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "tool_start" },
+        "tool": { "type": "string" },
+        "target": { "type": "string" },
+        "ticker": { "type": "string" }
+      },
+      "required": ["type", "tool", "target", "ticker"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "tool_end" },
+        "tool": { "type": "string" },
+        "ok": { "type": "boolean" },
+        "error": { "type": "string" }
+      },
+      "required": ["type", "tool", "ok"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "needs_approval" },
+        "id": { "type": "string" },
+        "kind": { "type": "string" },
+        "summary": { "type": "string" },
+        "details": { "type": "string" },
+        "diff": { "type": "string" }
+      },
+      "required": ["type", "id", "kind", "summary", "details"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "approval_resolved" },
+        "id": { "type": "string" },
+        "approved": { "type": "boolean" }
+      },
+      "required": ["type", "id", "approved"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "tts_start" },
+        "audio_url": { "type": "string" },
+        "sample_rate": { "type": "integer" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "tts_level" },
+        "level": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      },
+      "required": ["type", "level"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "tts_end" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "task_done" },
+        "actions": { "type": "integer", "minimum": 0 },
+        "files_changed": { "type": "integer", "minimum": 0 },
+        "duration_ms": { "type": "number", "minimum": 0 },
+        "last_sentence": { "type": "string" }
+      },
+      "required": ["type", "actions", "files_changed", "duration_ms", "last_sentence"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "usage" },
+        "tokens_in": { "type": "integer", "minimum": 0 },
+        "tokens_out": { "type": "integer", "minimum": 0 },
+        "cost_usd": { "type": "number", "minimum": 0.0 },
+        "day_cost_usd": { "type": "number", "minimum": 0.0 }
+      },
+      "required": ["type", "tokens_in", "tokens_out", "cost_usd", "day_cost_usd"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "error" },
+        "message": { "type": "string" },
+        "code": { "type": "string" }
+      },
+      "required": ["type", "message"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "pong" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    }
+  ]
+}

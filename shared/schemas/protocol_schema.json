@@ -1,0 +1,9 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CapriProtocolMessage",
+  "description": "Unified JSON schema for any valid message on the Capri WebSocket channel",
+  "oneOf": [
+    { "$ref": "./host_messages.json" },
+    { "$ref": "./brain_messages.json" }
+  ]
+}

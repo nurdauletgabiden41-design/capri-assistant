@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HostToBrainMessages",
+  "description": "Messages sent from Electron Host to Python Brain",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "handshake" },
+        "token": { "type": "string", "minLength": 32 }
+      },
+      "required": ["type", "token"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "user_text" },
+        "text": { "type": "string", "minLength": 1 }
+      },
+      "required": ["type", "text"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "ptt_start" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "ptt_stop" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "approval_response" },
+        "id": { "type": "string" },
+        "approved": { "type": "boolean" }
+      },
+      "required": ["type", "id", "approved"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "abort" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "settings_update" },
+        "settings": { "type": "object" }
+      },
+      "required": ["type", "settings"],
+      "additionalProperties": true
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "ping" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    }
+  ]
+}

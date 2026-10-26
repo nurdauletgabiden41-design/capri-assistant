@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+release/
+build/
+out/
+*.egg-info/
+
+# Local reference clones (read-only, not part of Capri repo)
+reference/
+
+# Non-MIT media assets (frames & cut-outs from Cyberpunk: Edgerunners, for personal local use only)
+app/assets/capri/
+
+# Logs and runtime artifacts
+*.log
+logs/
+actions.log
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
