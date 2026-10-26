@@ -81,5 +81,5 @@ This checklist must be verified at the end of each development stage before crea
   - `write_file`, `edit_file`, `run_python`, `close_app` always require explicit UI button click from the user.
   - Keyboard auto-confirmations or automatic approve timeouts are strictly forbidden.
 - [ ] **Prompt Injection Mitigation:** Untrusted file or web content is isolated within data envelopes, instructing the LLM to ignore embedded commands.
-- [ ] **Credential Security:** API keys stored exclusively in Windows Credential Manager via `keyring`. Zero plain-text keys in logs, config files, git commits, or IPC messages.
+- [x] **Credential Security:** API keys stored exclusively in Windows Credential Manager via `keyring`. Zero plain-text keys in logs, config files, git commits, or IPC messages.
 - [ ] **Action Logging:** All executed actions logged to `actions.log` with timestamps, action kind, and status, without recording secrets or sensitive file payloads.
