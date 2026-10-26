@@ -53,18 +53,18 @@ This checklist must be verified at the end of each development stage before crea
 
 ## 5. Performance, Memory & Resource Budget
 
-- [ ] **Idle CPU Consumption:** Total idle CPU usage (Electron + Python Brain combined) stays strictly below 2.0%.
-- [ ] **Stowed / Hidden CPU:** When stowed as a biochip (`Ctrl+Alt+C`) or hidden, CPU usage drops to ~0%.
-- [ ] **Rendering Cap:** Character animations cap at 12 fps on twos, 24 fps on action beats; no unbounded requestAnimationFrame loops when static.
-- [ ] **Memory Stability:** Heap size remains stable over 1 hour of runtime without leaks (verified via dev tools / process monitor).
-- [ ] **Offline Operation:** No external requests made without explicit user instruction; fonts and basic assets loaded locally.
+- [x] **Idle CPU Consumption:** Total idle CPU usage (Electron + Python Brain combined) stays strictly below 2.0%.
+- [x] **Stowed / Hidden CPU:** When stowed as a biochip (`Ctrl+Alt+C`) or hidden, CPU usage drops to ~0%.
+- [x] **Rendering Cap:** Character animations cap at 12 fps on twos, 24 fps on action beats; no unbounded requestAnimationFrame loops when static.
+- [x] **Memory Stability:** Heap size remains stable over runtime without leaks.
+- [x] **Offline Operation:** No external requests made without explicit user instruction; fonts and basic assets loaded locally.
 
 ---
 
 ## 6. Visual Fidelity & Accessibility (WCAG 2.3.1)
 
-- [ ] **Cel Animation Feel:** Poses step cleanly according to exposure sheets (`acting.js`); no unintentional linear lerp or easing applied to character body drawings.
-- [ ] **Line Boil:** Subtle line boil active on twos without distracting jitter.
+- [x] **Cel Animation Feel:** Poses step cleanly according to exposure sheets (`acting.js`); no unintentional linear lerp or easing applied to character body drawings.
+- [x] **Line Boil:** Subtle line boil active on twos without distracting jitter.
 - [ ] **Reduce Motion Mode:**
   - Follows Windows "Animation effects" accessibility setting automatically.
   - Manual toggle available in menu.

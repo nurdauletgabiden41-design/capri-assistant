@@ -1,5 +1,6 @@
 // Adapted from mochiiwuff/capri-desktop (MIT)
 
+import { VoiceSynth } from './audio/VoiceSynth';
 import { CapriController, WindowData } from './character/CapriController';
 import { Chip } from './character/Chip';
 import { getDemoSteps } from './demo/demoSequence';
@@ -23,6 +24,7 @@ declare global {
       sendToBrain: (msg: any) => void;
       getConfig: () => Promise<any>;
       setConfig: (patch: any) => Promise<any>;
+      getCustomSounds?: () => Promise<{ name: string; buffer: string }[]>;
       quit: () => void;
       triggerDemo: () => void;
     };
@@ -116,20 +118,36 @@ async function bootstrap() {
   const chip = new Chip(chipCanvas);
   chip.place(window.innerWidth, window.innerHeight);
 
+  // 2. Initialize Web Audio Synthesizer & Sound Overrides
+  const voice = new VoiceSynth();
+  const cfg = await host.getConfig();
+  voice.configure({ muted: cfg.muted, volume: cfg.volume });
+
+  try {
+    const customs = (await host.getCustomSounds?.()) || [];
+    for (const item of customs) {
+      const binary = atob(item.buffer);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      await voice.loadCustomSound(item.name, bytes.buffer);
+    }
+  } catch (err) {
+    console.warn('[main] Could not load custom sounds:', err);
+  }
+
   // Load cut-in assets
   const cutinNames = ['grin', 'laugh', 'eyes', 'many', 'look'];
   for (const name of cutinNames) {
     fx.loadCutin(name, `../assets/capri/cutin-${name}.png`);
   }
 
-  // 2. Load character sprite texture (or graceful fallback)
+  // 3. Load character sprite texture (or graceful fallback)
   const spriteImg = await loadImage('../assets/capri/capri-full.png');
   const textureSource: TexImageSource = spriteImg || makeFallbackTexture();
 
-  // 3. Initialize WebGL Capri Controller
-  const capri = new CapriController(capriEl, canvasEl, textureSource, fx);
+  // 4. Initialize WebGL Capri Controller
+  const capri = new CapriController(capriEl, canvasEl, textureSource, fx, voice);
 
-  const cfg = await host.getConfig();
   capri.setScale(cfg.scale || 0.6);
   capri.wander = cfg.wander ?? true;
 
@@ -155,12 +173,44 @@ async function bootstrap() {
 
   capri.onMove = () => updatePanelPosition();
 
+  // Typewriter Scramble Decode Animation
+  const NOISE = '░▒▓█▄▀#%&/\\<>01XZ';
+  let decodeTimer: any = null;
+
+  function decodeText(text: string, onChar?: () => void) {
+    clearInterval(decodeTimer);
+    const chars = [...text];
+    let done = 0;
+
+    const step = () => {
+      done = Math.min(chars.length, done + 2);
+      const head = chars.slice(0, done).join('');
+      let tail = '';
+      for (let i = done; i < Math.min(chars.length, done + 6); i++) {
+        tail +=
+          chars[i] === ' ' || chars[i] === '\n'
+            ? chars[i]
+            : NOISE[Math.floor(Math.random() * NOISE.length)];
+      }
+      panelText.textContent = head + tail;
+      onChar?.();
+
+      if (done >= chars.length) {
+        clearInterval(decodeTimer);
+        panelText.textContent = text;
+      }
+    };
+
+    step();
+    decodeTimer = setInterval(step, 24);
+  }
+
   // Speech bubble notification line
   capri.onSpeakLine = (line: string) => {
     panelEl.hidden = false;
     panelBadge.textContent = 'CAPRI';
     panelBadge.className = 'panel__badge';
-    panelText.textContent = line;
+    decodeText(line, () => voice.play('blip'));
     setFace('smug');
     updatePanelPosition();
   };
@@ -226,6 +276,7 @@ async function bootstrap() {
     contextMenu.style.left = `${posX}px`;
     contextMenu.style.top = `${posY}px`;
     contextMenu.hidden = false;
+    voice.play('tick');
     setInteractive(true);
   }
 
@@ -301,6 +352,7 @@ async function bootstrap() {
         // Clicked biochip: restore Capri
         chip.hide();
         capri.unstow();
+        voice.play('rise');
         host.setConfig({ visible: true });
       }
     }
@@ -337,13 +389,16 @@ async function bootstrap() {
               panelBadge.className = 'panel__badge';
 
               if (capri.mode === 'offline') {
-                panelText.textContent = 'Конструкт оффлайн. Мозг не отвечает.';
+                decodeText('Конструкт оффлайн. Мозг не отвечает.', () => voice.play('blip'));
                 setFace('laugh');
               } else if (capri.mode === 'work') {
-                panelText.textContent = 'Работаю над задачей, не отвлекай~';
+                decodeText('Работаю над задачей, не отвлекай~', () => voice.play('blip'));
                 setFace('aside');
               } else {
-                panelText.textContent = 'Привет! Чем займёмся? Могу открыть сайты, запустить тесты или поработать с файлами.';
+                decodeText(
+                  'Привет! Чем займёмся? Могу открыть сайты, запустить тесты или поработать с файлами.',
+                  () => voice.play('blip')
+                );
                 setFace('smug');
                 panelActions.hidden = false;
                 panelActions.innerHTML = `<button class="btn" id="btn-talk">ПОГОВОРИМ?</button>`;
@@ -370,21 +425,26 @@ async function bootstrap() {
     closeContextMenu();
 
     if (action === 'stow') {
+      voice.play('teleport-out');
       capri.stow();
       chip.show();
       host.setConfig({ visible: false });
     } else if (action === 'sleep') {
+      voice.play('star');
       capri.setStance('sleep');
       capri.isSleeping = true;
     } else if (action === 'dance') {
+      voice.play('rise');
       capri.playAct('victory');
       fx.showCutin('grin', 900);
     } else if (action === 'talk') {
+      voice.play('hello');
       panelEl.hidden = false;
       chatInput.focus();
     } else if (action === 'settings') {
+      voice.play('tick');
       panelEl.hidden = false;
-      panelText.textContent = 'Конфигурация Capri: %APPDATA%\\Capri\\config.json';
+      decodeText('Конфигурация Capri: %APPDATA%\\Capri\\config.json', () => voice.play('blip'));
       setFace('look');
       updatePanelPosition();
     } else if (action === 'quit') {
@@ -417,6 +477,7 @@ async function bootstrap() {
     panelText.textContent = 'Обрабатываю...';
     setFace('calm');
     capri.playAct('talk');
+    voice.play('tick');
     host.sendToBrain({ type: 'user_text', text });
   });
 
@@ -424,9 +485,11 @@ async function bootstrap() {
   host.onCommand((cmd) => {
     if (cmd.name === 'stow') {
       if (cmd.on) {
+        voice.play('teleport-out');
         capri.stow();
         chip.show();
       } else {
+        voice.play('rise');
         chip.hide();
         capri.unstow();
       }
@@ -445,6 +508,11 @@ async function bootstrap() {
     capri.setWindows(data);
   });
 
+  // Config Update Event (volume & mute)
+  host.onConfigChanged?.((updated: any) => {
+    voice.configure({ muted: updated.muted, volume: updated.volume });
+  });
+
   // Brain Protocol Message Dispatcher
   host.onBrainEvent((msg: any) => {
     const type = msg.type;
@@ -455,7 +523,8 @@ async function bootstrap() {
       panelBadge.textContent = 'ONLINE';
       panelBadge.className = 'panel__badge';
       panelEl.hidden = false;
-      panelText.textContent = `Капри онлайн! Модель: ${msg.active_model || 'Haiku'}`;
+      voice.play('hello');
+      decodeText(`Капри онлайн! Модель: ${msg.active_model || 'Haiku'}`, () => voice.play('blip'));
       setFace('smug');
       capri.playAct('hop');
       updatePanelPosition();
@@ -464,13 +533,15 @@ async function bootstrap() {
       offlineBanner.hidden = false;
       panelBadge.textContent = 'OFFLINE';
       panelBadge.className = 'panel__badge badge-offline';
-      panelText.textContent = 'Конструкт отключен от нейросети.';
+      voice.play('error');
+      decodeText('Конструкт отключен от нейросети.', () => voice.play('blip'));
       setFace('laugh');
     } else if (type === 'thinking_start') {
       tickerEl.hidden = false;
       tickerEl.className = 'is-thinking';
       tickerVerb.textContent = 'THINKING...';
       tickerTarget.textContent = '';
+      voice.play('tick');
       capri.playAct('curious', capri.facing);
       updatePanelPosition();
     } else if (type === 'thinking_tick') {
@@ -479,14 +550,15 @@ async function bootstrap() {
       tickerEl.hidden = true;
     } else if (type === 'assistant_message') {
       panelEl.hidden = false;
-      panelText.textContent = msg.text || '';
+      decodeText(msg.text || '', () => voice.play('blip'));
       if (msg.face) setFace(msg.face);
       if (msg.badge) panelBadge.textContent = msg.badge;
       capri.playAct('talk');
       updatePanelPosition();
     } else if (type === 'tool_start') {
-      // Capri settles on the active window when working
       capri.goToWork();
+      voice.play('bolt', { soft: true });
+      fx.glyph(capri.pos.x, capri.pos.y - 250 * capri.scale);
 
       tickerEl.hidden = false;
       tickerEl.className = '';
@@ -494,6 +566,7 @@ async function bootstrap() {
       tickerTarget.textContent = msg.target || '';
       updatePanelPosition();
     } else if (type === 'tool_end') {
+      voice.play('tick');
       setTimeout(() => {
         if (!tickerEl.classList.contains('is-thinking')) {
           tickerEl.hidden = true;
@@ -505,11 +578,12 @@ async function bootstrap() {
       }
       capri.playAct('alarm', capri.facing);
       fx.showCutin('many', 900);
+      voice.play('alert');
 
       panelEl.hidden = false;
       panelBadge.textContent = 'APPROVAL';
       panelBadge.className = 'panel__badge badge-offline';
-      panelText.textContent = `${msg.summary}\n${msg.details}`;
+      decodeText(`${msg.summary}\n${msg.details}`, () => voice.play('blip'));
       setFace('many');
 
       panelActions.hidden = false;
@@ -530,18 +604,23 @@ async function bootstrap() {
       updatePanelPosition();
     } else if (type === 'approval_resolved') {
       panelActions.hidden = true;
-      panelText.textContent = msg.approved ? 'Действие подтверждено!' : 'Действие отклонено пользователем.';
+      voice.play(msg.approved ? 'hello' : 'alert');
+      decodeText(
+        msg.approved ? 'Действие подтверждено!' : 'Действие отклонено пользователем.',
+        () => voice.play('blip')
+      );
       setFace(msg.approved ? 'smug' : 'aside');
       capri.playAct(msg.approved ? 'hop' : 'flinch');
     } else if (type === 'task_done') {
       // Victory sequence & cut-in
       capri.playAct('victory', capri.facing);
       fx.showCutin('grin', 1100);
+      voice.play('done');
 
       panelEl.hidden = false;
       panelBadge.textContent = 'VICTORY';
       panelBadge.className = 'panel__badge';
-      panelText.textContent = `Задача выполнена!\n${msg.last_sentence}`;
+      decodeText(`Задача выполнена!\n${msg.last_sentence}`, () => voice.play('blip'));
       setFace('laugh');
       updatePanelPosition();
     }
@@ -552,7 +631,7 @@ async function bootstrap() {
   host.onDemoStart(() => {
     clearTimeout(demoTimer);
     panelEl.hidden = false;
-    panelText.textContent = 'Запуск демонстрационной сессии...';
+    decodeText('Запуск демонстрационной сессии...', () => voice.play('blip'));
     setFace('wide');
     capri.wake();
 
@@ -590,7 +669,7 @@ async function bootstrap() {
   }
   requestAnimationFrame(renderLoop);
 
-  console.log('[renderer] Stage 3 Window Tracking & Behaviours Controller initialized.');
+  console.log('[renderer] Stage 4 Effects, Transmission Panel & Voice Synth initialized.');
 }
 
 if (document.readyState === 'loading') {

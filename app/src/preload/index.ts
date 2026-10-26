@@ -48,6 +48,11 @@ contextBridge.exposeInMainWorld('host', {
     return ipcRenderer.invoke('config:set', patch);
   },
 
+  // Sound overrides
+  getCustomSounds: () => {
+    return ipcRenderer.invoke('sounds:get-custom');
+  },
+
   // App control
   quit: () => {
     ipcRenderer.send('app:quit');

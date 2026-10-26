@@ -41,7 +41,47 @@ interface Ring {
   life: number;
 }
 
-type FxItem = Shard | Bolt | Ring;
+interface Beam {
+  type: 'beam';
+  x: number;
+  ground: number;
+  width: number;
+  down: boolean;
+  birth: number;
+  life: number;
+}
+
+interface Slit {
+  type: 'slit';
+  x: number;
+  top: number;
+  bottom: number;
+  width: number;
+  birth: number;
+  life: number;
+}
+
+interface Glyph {
+  type: 'glyph';
+  x: number;
+  y: number;
+  text: string;
+  birth: number;
+  life: number;
+}
+
+interface Vortex {
+  type: 'vortex';
+  cx: number;
+  cy: number;
+  radius: number;
+  birth: number;
+  life: number;
+}
+
+type FxItem = Shard | Bolt | Ring | Beam | Slit | Glyph | Vortex;
+
+const GLYPHS = ['01', '10', '▚', '▞', '◢', '◣', '>_', '{}', '#', '⌁', '//', '0x'];
 
 export class FxLayer {
   public canvas: HTMLCanvasElement;
@@ -89,21 +129,26 @@ export class FxLayer {
   public burst(
     x: number,
     y: number,
-    opts: { count?: number; power?: number; spread?: number } = {}
+    opts: { count?: number; power?: number; spread?: number; inward?: boolean } = {}
   ): void {
     const count = opts.count ?? 18;
     const power = opts.power ?? 1;
     const spread = opts.spread ?? 50;
+    const inward = opts.inward ?? false;
     const now = performance.now();
     const colors = ['#ff2152', '#36ff7a', '#7b3dff', '#fff4f6'];
 
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = (180 + Math.random() * 420) * power;
+      const speed = (180 + Math.random() * 420) * power * (inward ? -1 : 1);
+      const life = 250 + Math.random() * 350;
+      const ox = x + (Math.random() - 0.5) * spread;
+      const oy = y + (Math.random() - 0.5) * spread;
+
       this.items.push({
         type: 'shard',
-        x: x + (Math.random() - 0.5) * spread,
-        y: y + (Math.random() - 0.5) * spread,
+        x: inward ? ox + Math.cos(angle) * (speed * life) / 1600 : ox,
+        y: inward ? oy + Math.sin(angle) * (speed * life) / 1600 : oy,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         rot: Math.random() * Math.PI * 2,
@@ -111,7 +156,7 @@ export class FxLayer {
         size: 4 + Math.random() * 8,
         color: colors[Math.floor(Math.random() * colors.length)],
         birth: now,
-        life: 250 + Math.random() * 350,
+        life,
       });
     }
   }
@@ -173,6 +218,61 @@ export class FxLayer {
     });
   }
 
+  public beam(
+    x: number,
+    ground: number,
+    opts: { width?: number; down?: boolean; life?: number } = {}
+  ): void {
+    this.items.push({
+      type: 'beam',
+      x,
+      ground,
+      width: opts.width ?? 36,
+      down: opts.down ?? false,
+      birth: performance.now(),
+      life: opts.life ?? 260,
+    });
+  }
+
+  public slit(
+    x: number,
+    top: number,
+    bottom: number,
+    opts: { width?: number; life?: number } = {}
+  ): void {
+    this.items.push({
+      type: 'slit',
+      x,
+      top,
+      bottom,
+      width: opts.width ?? 32,
+      birth: performance.now(),
+      life: opts.life ?? 240,
+    });
+  }
+
+  public glyph(x: number, y: number): void {
+    this.items.push({
+      type: 'glyph',
+      x: x + (Math.random() - 0.5) * 30,
+      y,
+      text: GLYPHS[Math.floor(Math.random() * GLYPHS.length)],
+      birth: performance.now(),
+      life: 800 + Math.random() * 400,
+    });
+  }
+
+  public vortex(cx: number, cy: number, opts: { radius?: number; life?: number } = {}): void {
+    this.items.push({
+      type: 'vortex',
+      cx,
+      cy,
+      radius: opts.radius ?? 120,
+      birth: performance.now(),
+      life: opts.life ?? 280,
+    });
+  }
+
   private generateJaggedLine(
     a: FxPoint,
     b: FxPoint,
@@ -203,9 +303,9 @@ export class FxLayer {
   public update(now: number): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // 1. Update and draw items (bolts, shards, rings)
+    // 1. Update and draw items
     const alive: FxItem[] = [];
-    const dt = 0.016; // approximate frame delta
+    const dt = 0.016;
 
     for (const item of this.items) {
       const age = now - item.birth;
@@ -261,12 +361,64 @@ export class FxLayer {
         this.ctx.arc(item.x, item.y, r, 0, Math.PI * 2);
         this.ctx.stroke();
 
-        // Violet misregistered echo ring
         this.ctx.strokeStyle = '#7b3dff';
         this.ctx.lineWidth = 1.5;
         this.ctx.beginPath();
         this.ctx.arc(item.x + 2, item.y + 2, r, 0, Math.PI * 2);
         this.ctx.stroke();
+        this.ctx.restore();
+      } else if (item.type === 'beam') {
+        const alpha = Math.sin(progress * Math.PI);
+        const w = item.width * (1 - progress * 0.3);
+
+        this.ctx.save();
+        this.ctx.globalAlpha = alpha;
+        // Violet shadow
+        this.ctx.fillStyle = '#7b3dff';
+        this.ctx.fillRect(item.x - w * 0.5 - 3, 0, w + 6, item.ground);
+        // Green beam core
+        this.ctx.fillStyle = '#36ff7a';
+        this.ctx.fillRect(item.x - w * 0.5, 0, w, item.ground);
+        // White intense center
+        this.ctx.fillStyle = '#fff4f6';
+        this.ctx.fillRect(item.x - w * 0.2, 0, w * 0.4, item.ground);
+        this.ctx.restore();
+      } else if (item.type === 'slit') {
+        const alpha = 1 - progress;
+        const height = item.bottom - item.top;
+        const w = item.width * (1 - progress);
+
+        this.ctx.save();
+        this.ctx.globalAlpha = alpha;
+        this.ctx.fillStyle = '#14101c';
+        this.ctx.fillRect(item.x - w * 0.5, item.top, w, height);
+        this.ctx.fillStyle = '#ff2152';
+        this.ctx.fillRect(item.x - 2, item.top, 4, height);
+        this.ctx.restore();
+      } else if (item.type === 'glyph') {
+        const alpha = 1 - progress;
+        const y = item.y - progress * 30;
+
+        this.ctx.save();
+        this.ctx.globalAlpha = alpha;
+        this.ctx.font = 'bold 12px "JetBrains Mono", monospace';
+        this.ctx.fillStyle = '#36ff7a';
+        this.ctx.fillText(item.text, item.x, y);
+        this.ctx.restore();
+      } else if (item.type === 'vortex') {
+        const alpha = 1 - progress;
+        const r = item.radius * (1 - progress);
+        const count = 12;
+
+        this.ctx.save();
+        this.ctx.globalAlpha = alpha;
+        for (let i = 0; i < count; i++) {
+          const a = (i / count) * Math.PI * 2 + progress * 8;
+          const px = item.cx + Math.cos(a) * r;
+          const py = item.cy + Math.sin(a) * r;
+          this.ctx.fillStyle = i % 2 === 0 ? '#36ff7a' : '#ff2152';
+          this.ctx.fillRect(px - 3, py - 3, 6, 6);
+        }
         this.ctx.restore();
       }
     }

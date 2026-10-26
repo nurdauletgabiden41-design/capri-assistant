@@ -1,5 +1,6 @@
 // Adapted from mochiiwuff/capri-desktop (MIT)
 
+import type { VoiceSynth } from '../audio/VoiceSynth';
 import type { FxLayer } from '../fx/FxLayer';
 import { ACTS, NEUTRAL, Player, Pose } from '../sprite/acting';
 import { SPRITE, SpriteRenderer, SpriteState } from '../sprite/SpriteRenderer';
@@ -30,6 +31,7 @@ export class CapriController {
   public canvas: HTMLCanvasElement;
   public renderer: SpriteRenderer;
   public fx?: FxLayer;
+  public voice?: VoiceSynth;
 
   public pos = { x: 300, y: 500 };
   public facing: 1 | -1 = 1;
@@ -112,11 +114,13 @@ export class CapriController {
     root: HTMLElement,
     canvas: HTMLCanvasElement,
     image: TexImageSource,
-    fx?: FxLayer
+    fx?: FxLayer,
+    voice?: VoiceSynth
   ) {
     this.root = root;
     this.canvas = canvas;
     this.fx = fx;
+    this.voice = voice;
     this.renderer = new SpriteRenderer(canvas, image);
     this.basePlayer = new Player('stand');
     this.buildAlphaMap(image);
@@ -342,9 +346,11 @@ export class CapriController {
     const s = this.scale;
     if (target.stance === 'sit') {
       this.playAct('hop'); // plop onto ledge
+      this.voice?.play('land');
       this.fx?.burst(this.pos.x, this.pos.y - 30 * s, { count: 8, spread: 30 });
     } else {
       this.playAct('land');
+      this.voice?.play('land');
       this.fx?.burst(this.pos.x, this.pos.y - 20 * s, { count: 18, power: 0.8, spread: 60 * s });
       this.fx?.ring(this.pos.x, this.pos.y - 10, { size: 0.6 });
     }
@@ -478,6 +484,7 @@ export class CapriController {
     };
 
     this.playAct('point', x < this.pos.x ? -1 : 1);
+    this.voice?.play('bolt');
     this.fx.bolt(hand, { x, y }, { life: 260, forks: 2, width: 3 });
     this.fx.burst(x, y, { count: 8, power: 0.4, spread: 20 });
     this.fx.ring(x, y, { size: 0.35, color: '#ff2152' });
@@ -506,6 +513,7 @@ export class CapriController {
       this.pos = this.seat(win, dx);
       this.setStance('sit', { perch: { id: win.id, dx } });
       this.playAct('hop');
+      this.voice?.play('land');
       this.fx?.burst(this.pos.x, this.pos.y - 30 * s, { count: 8, spread: 30 });
       return;
     }
@@ -514,6 +522,7 @@ export class CapriController {
       this.fall();
     } else {
       this.playAct('land');
+      this.voice?.play('land');
     }
   }
 
@@ -535,6 +544,8 @@ export class CapriController {
     };
 
     // Vanish effects
+    this.voice?.play('teleport-out');
+    this.fx?.slit(this.pos.x, fromHead.y - 40, this.pos.y, { width: 36 * this.scale });
     this.state.glitch = 0.4;
     this.state.split = 4;
     this.fx?.burst(fromHead.x, fromHead.y, { count: 14, spread: 50 });
@@ -550,6 +561,9 @@ export class CapriController {
       x: this.pos.x,
       y: this.pos.y - 320 * this.scale,
     };
+    this.voice?.play('teleport-in');
+    this.fx?.beam(this.pos.x, this.pos.y, { down: true, width: 36 * this.scale });
+    this.fx?.vortex(toHead.x, toHead.y, { radius: 100 * this.scale });
     this.fx?.bolt(fromHead, toHead, { life: 200, forks: 1, width: 3 });
     this.fx?.burst(toHead.x, toHead.y, { count: 16, power: 0.7, spread: 70 });
     this.fx?.ring(toHead.x, toHead.y, { size: 0.5 });
@@ -584,6 +598,7 @@ export class CapriController {
     ];
     const line = lines[Math.floor(Math.random() * lines.length)];
     this.onSpeakLine?.(line);
+    this.voice?.play('alert');
 
     this.playAct('flinch');
     setTimeout(() => {

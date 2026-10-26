@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { app, globalShortcut, ipcMain, powerMonitor, screen } from 'electron';
 import { BrainProcessManager } from './brain-process';
-import { CapriConfig, loadConfig, saveConfig } from './config';
+import { CapriConfig, getCustomSoundsDir, loadConfig, saveConfig } from './config';
 import { logger } from './logger';
 import { OverlayManager } from './overlay';
 import { TrayManager } from './tray';
@@ -201,6 +201,24 @@ function registerIpc(): void {
     overlay?.window?.webContents.send('config:changed', updated);
     tray?.rebuildMenu();
     return updated;
+  });
+
+  ipcMain.handle('sounds:get-custom', async () => {
+    const dir = getCustomSoundsDir();
+    const list: { name: string; buffer: string }[] = [];
+    try {
+      for (const file of fs.readdirSync(dir)) {
+        const ext = path.extname(file).toLowerCase();
+        if (['.mp3', '.wav', '.ogg'].includes(ext)) {
+          const name = path.basename(file, ext);
+          const data = fs.readFileSync(path.join(dir, file));
+          list.push({ name, buffer: data.toString('base64') });
+        }
+      }
+    } catch (err) {
+      logger.warn('[main] Could not read custom_sounds dir:', err);
+    }
+    return list;
   });
 
   ipcMain.on('brain:send', (_e, msg: Record<string, unknown>) => {

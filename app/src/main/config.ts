@@ -43,6 +43,12 @@ export function getConfigDir(): string {
   return dir;
 }
 
+export function getCustomSoundsDir(): string {
+  const dir = path.join(getConfigDir(), 'custom_sounds');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 export function getConfigPath(): string {
   return path.join(getConfigDir(), 'config.json');
 }

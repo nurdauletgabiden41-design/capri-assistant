@@ -66,6 +66,23 @@ async function build() {
     }
   }
 
+  // 4b. Copy local fonts to dist/renderer/fonts
+  const fontsDst = path.join(DIST, 'renderer', 'fonts');
+  fs.mkdirSync(fontsDst, { recursive: true });
+  const fontFiles = [
+    [path.join(ROOT, 'node_modules', '@fontsource', 'chakra-petch', 'files', 'chakra-petch-latin-600-normal.woff2'), 'chakra-petch-latin-600-normal.woff2'],
+    [path.join(ROOT, 'node_modules', '@fontsource', 'chakra-petch', 'files', 'chakra-petch-latin-700-normal.woff2'), 'chakra-petch-latin-700-normal.woff2'],
+    [path.join(ROOT, 'node_modules', '@fontsource', 'jetbrains-mono', 'files', 'jetbrains-mono-latin-400-normal.woff2'), 'jetbrains-mono-latin-400-normal.woff2'],
+    [path.join(ROOT, 'node_modules', '@fontsource', 'jetbrains-mono', 'files', 'jetbrains-mono-cyrillic-400-normal.woff2'), 'jetbrains-mono-cyrillic-400-normal.woff2'],
+    [path.join(ROOT, 'node_modules', '@fontsource', 'jetbrains-mono', 'files', 'jetbrains-mono-latin-600-normal.woff2'), 'jetbrains-mono-latin-600-normal.woff2'],
+    [path.join(ROOT, 'node_modules', '@fontsource', 'jetbrains-mono', 'files', 'jetbrains-mono-cyrillic-600-normal.woff2'), 'jetbrains-mono-cyrillic-600-normal.woff2'],
+  ];
+  for (const [src, name] of fontFiles) {
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, path.join(fontsDst, name));
+    }
+  }
+
   // 5. Copy Assets if present (optional/personal use)
   const assetsSrc = path.join(ROOT, 'app', 'assets');
   const assetsDst = path.join(DIST, 'assets');
