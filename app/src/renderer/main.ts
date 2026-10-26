@@ -112,6 +112,13 @@ async function bootstrap() {
   const tickerTarget = tickerEl.querySelector('.ticker__target') as HTMLSpanElement;
   const offlineBanner = document.getElementById('offline-banner') as HTMLDivElement;
   const contextMenu = document.getElementById('context-menu') as HTMLDivElement;
+  const btnPtt = document.getElementById('btn-ptt') as HTMLButtonElement | null;
+  const panelWave = document.getElementById('panel-wave') as HTMLDivElement | null;
+  const waveBars = panelWave?.querySelectorAll('.panel__wave-bar') as NodeListOf<HTMLDivElement> | null;
+
+  let currentAudio: HTMLAudioElement | null = null;
+  let mediaRecorder: MediaRecorder | null = null;
+  let audioChunks: Blob[] = [];
 
   // 1. Initialize FX & Chip
   const fx = new FxLayer(fxCanvas);
@@ -481,6 +488,52 @@ async function bootstrap() {
     host.sendToBrain({ type: 'user_text', text });
   });
 
+  // Push-To-Talk Button Handler
+  if (btnPtt) {
+    const startPtt = async () => {
+      btnPtt.classList.add('is-recording');
+      host.sendToBrain({ type: 'ptt_start' });
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = (ev) => {
+          if (ev.data.size > 0) audioChunks.push(ev.data);
+        };
+        mediaRecorder.start(100);
+      } catch (err) {
+        console.warn('[renderer] Microphone access unavailable, continuing with protocol PTT:', err);
+      }
+    };
+
+    const stopPtt = () => {
+      if (!btnPtt.classList.contains('is-recording')) return;
+      btnPtt.classList.remove('is-recording');
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(audioChunks, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const base64Audio = reader.result as string;
+            host.sendToBrain({ type: 'ptt_stop', audio: base64Audio });
+          };
+          reader.readAsDataURL(blob);
+        };
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+        mediaRecorder = null;
+      } else {
+        host.sendToBrain({ type: 'ptt_stop' });
+      }
+    };
+
+    btnPtt.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startPtt();
+    });
+    window.addEventListener('mouseup', () => stopPtt());
+  }
+
   // Host Commands (e.g. from tray or hotkey)
   host.onCommand((cmd) => {
     if (cmd.name === 'stow') {
@@ -623,6 +676,63 @@ async function bootstrap() {
       decodeText(`Задача выполнена!\n${msg.last_sentence}`, () => voice.play('blip'));
       setFace('laugh');
       updatePanelPosition();
+    } else if (type === 'listening_start') {
+      btnPtt?.classList.add('is-recording');
+      panelEl.hidden = false;
+      panelBadge.textContent = 'LISTENING';
+      panelBadge.className = 'panel__badge';
+      if (panelWave) panelWave.hidden = false;
+      decodeText('Слушаю тебя...', () => voice.play('blip'));
+      setFace('look');
+      capri.playAct('curious', capri.facing);
+      updatePanelPosition();
+    } else if (type === 'listening_level') {
+      const lvl = Math.max(0, Math.min(1, msg.level || 0));
+      if (waveBars) {
+        waveBars.forEach((bar, i) => {
+          const h = Math.round(3 + lvl * 13 * (0.6 + 0.4 * Math.sin(i * 1.3)));
+          bar.style.height = `${h}px`;
+        });
+      }
+    } else if (type === 'listening_end') {
+      btnPtt?.classList.remove('is-recording');
+      panelBadge.textContent = 'STT...';
+      decodeText('Распознаю голос...', () => voice.play('blip'));
+    } else if (type === 'transcript') {
+      panelBadge.textContent = 'USER';
+      if (panelWave) panelWave.hidden = true;
+      decodeText(msg.text, () => voice.play('blip'));
+    } else if (type === 'tts_start') {
+      if (panelWave) panelWave.hidden = false;
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+      }
+      if (msg.audio) {
+        currentAudio = new Audio(msg.audio);
+        currentAudio.play().catch((err) => console.warn('[renderer] Audio playback failed:', err));
+        currentAudio.onended = () => {
+          currentAudio = null;
+          if (panelWave) panelWave.hidden = true;
+        };
+      }
+    } else if (type === 'tts_level') {
+      const lvl = Math.max(0, Math.min(1, msg.level || 0));
+      if (lvl > 0.15) {
+        capri.playAct('talk');
+      }
+      if (waveBars) {
+        waveBars.forEach((bar, i) => {
+          const h = Math.round(3 + lvl * 13 * (0.5 + 0.5 * Math.cos(i * 1.5)));
+          bar.style.height = `${h}px`;
+        });
+      }
+    } else if (type === 'tts_end') {
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+      }
+      if (panelWave) panelWave.hidden = true;
     }
   });
 

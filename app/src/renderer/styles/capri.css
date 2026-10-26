@@ -290,6 +290,45 @@ html, body {
   color: var(--ink);
 }
 
+.panel__mic {
+  background: #1e172e;
+  border: 1px solid var(--violet);
+  color: var(--paper);
+  font-size: 13px;
+  padding: 0 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.panel__mic:hover {
+  background: var(--cyan);
+  color: var(--ink);
+}
+.panel__mic.is-recording {
+  background: var(--red);
+  border-color: var(--magenta);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255, 60, 100, 0.8);
+}
+
+/* Audio wave animation bars */
+.panel__wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  margin: 6px 0;
+}
+.panel__wave-bar {
+  flex: 1;
+  background: var(--green);
+  height: 4px;
+  min-height: 2px;
+  max-height: 16px;
+  transition: height 0.05s ease;
+  box-shadow: 0 0 4px var(--green);
+}
+
 /* Offline Banner */
 #offline-banner {
   position: absolute;

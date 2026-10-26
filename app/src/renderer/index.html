@@ -35,9 +35,17 @@
       </div>
       <div class="panel__content">
         <p class="panel__text" id="panel-text">Капри слушает...</p>
+        <div class="panel__wave" id="panel-wave" hidden>
+          <div class="panel__wave-bar"></div>
+          <div class="panel__wave-bar"></div>
+          <div class="panel__wave-bar"></div>
+          <div class="panel__wave-bar"></div>
+          <div class="panel__wave-bar"></div>
+        </div>
         <div class="panel__actions" id="panel-actions" hidden></div>
         <form class="panel__chat-form" id="chat-form">
           <input type="text" class="panel__input" id="chat-input" placeholder="Спроси или скомандуй..." autocomplete="off">
+          <button type="button" class="panel__mic" id="btn-ptt" title="Зажать для голосового ввода (PTT)">🎤</button>
           <button type="submit" class="panel__send">▶</button>
         </form>
       </div>

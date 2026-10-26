@@ -32,7 +32,8 @@
     {
       "type": "object",
       "properties": {
-        "type": { "const": "ptt_stop" }
+        "type": { "const": "ptt_stop" },
+        "audio": { "type": "string" }
       },
       "required": ["type"],
       "additionalProperties": false

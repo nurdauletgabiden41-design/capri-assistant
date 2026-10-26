@@ -75,8 +75,15 @@ if (!gotTheLock) {
     // 6. Global Shortcuts
     try {
       globalShortcut.register('Control+Alt+C', () => toggleVisible());
+
+      let isPttActive = false;
+      globalShortcut.register('Control+Shift+Space', () => {
+        isPttActive = !isPttActive;
+        logger.info(`[main] Global PTT hotkey triggered (active: ${isPttActive})`);
+        wsServer?.sendToBrain({ type: isPttActive ? 'ptt_start' : 'ptt_stop' });
+      });
     } catch (err) {
-      logger.error('[main] Failed to register Control+Alt+C shortcut:', err);
+      logger.error('[main] Failed to register global shortcuts:', err);
     }
 
     // 7. Register IPC handlers

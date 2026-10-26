@@ -25,6 +25,7 @@ from brain.security import keychain
 from brain.security.approval import HostApprovalGate
 from brain.security.audit import ActionLogger
 from brain.tools.registry import ToolRegistry
+from brain.voice.manager import VoiceManager
 
 VERSION = "0.1.0"
 DEFAULT_MODEL = "anthropic/claude-haiku-5.5"
@@ -56,6 +57,7 @@ session_start_time = datetime.now(UTC).isoformat()
 approval_gate = HostApprovalGate()
 action_logger = ActionLogger()
 tool_registry = ToolRegistry(action_logger=action_logger)
+voice_manager = VoiceManager()
 
 
 async def handle_user_text(client: BrainWsClient, text: str) -> None:
@@ -239,6 +241,9 @@ async def handle_user_text(client: BrainWsClient, text: str) -> None:
             }
         )
 
+        # Trigger neural voice synthesis with lip-sync in background
+        asyncio.create_task(voice_manager.speak(client, complete_text))
+
         # Emit task_done if actions were carried out
         duration_ms = int((time.time() - start_time) * 1000)
         if actions_count > 0:
@@ -320,9 +325,19 @@ async def handle_host_message(client: BrainWsClient, msg: dict[str, Any]) -> Non
             }
         )
 
+    elif msg_type == "ptt_start":
+        await voice_manager.handle_ptt_start(client)
+
+    elif msg_type == "ptt_stop":
+        audio_b64 = msg.get("audio")
+        text = await voice_manager.handle_ptt_stop(client, audio_payload=audio_b64)
+        if text:
+            await handle_user_text(client, text)
+
     elif msg_type == "abort":
-        logger.info("Abort received from Host. Cancelling active approval gates.")
+        logger.info("Abort received from Host. Cancelling active approval gates and TTS.")
         approval_gate.cancel_all()
+        await client.send({"type": "tts_end"})
 
 
 async def main() -> None:
