@@ -6,7 +6,20 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import av
+
 logger = logging.getLogger("capri.brain.voice.stt")
+
+# Compatibility patch: PyAV 14+ removed 'metadata_errors' keyword argument expected by faster-whisper
+_orig_av_open = av.open
+
+
+def _safe_av_open(*args: Any, **kwargs: Any) -> Any:
+    kwargs.pop("metadata_errors", None)
+    return _orig_av_open(*args, **kwargs)
+
+
+av.open = _safe_av_open
 
 
 class WhisperTranscriber:
@@ -42,7 +55,8 @@ class WhisperTranscriber:
         try:
             if isinstance(audio_input, (bytes, io.BytesIO)):
                 raw_bytes = audio_input.getvalue() if isinstance(audio_input, io.BytesIO) else audio_input
-                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                suffix = ".wav" if raw_bytes.startswith(b"RIFF") else ".webm"
+                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                     tmp.write(raw_bytes)
                     temp_path = Path(tmp.name)
                 source_path = str(temp_path)

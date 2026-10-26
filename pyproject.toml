@@ -2,7 +2,6 @@
 pythonpath = ["."]
 testpaths = ["brain/tests"]
 asyncio_mode = "auto"
-addopts = "--basetemp=.pytest_temp"
 
 [tool.ruff]
 line-length = 100
