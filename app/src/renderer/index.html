@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capri Overlay</title>
+  <link rel="stylesheet" href="styles/capri.css">
+</head>
+<body>
+  <div id="offline-banner" hidden>
+    ⚠ CONSTRUCT OFFLINE — BRAIN DISCONNECTED
+  </div>
+
+  <div id="ticker" hidden>
+    <span class="ticker__verb">READY</span>
+    <span class="ticker__target"></span>
+  </div>
+
+  <div id="capri">
+    <canvas id="sprite"></canvas>
+  </div>
+
+  <div id="panel" hidden>
+    <div class="panel__header">
+      <span class="panel__badge">CAPRI</span>
+      <button class="panel__close" id="panel-close" title="Закрыть">✕</button>
+    </div>
+    <div class="panel__body">
+      <div class="panel__face" id="panel-face">
+        <img id="face-img" src="" alt="Capri Face">
+      </div>
+      <div class="panel__content">
+        <p class="panel__text" id="panel-text">Капри слушает...</p>
+        <div class="panel__actions" id="panel-actions" hidden></div>
+        <form class="panel__chat-form" id="chat-form">
+          <input type="text" class="panel__input" id="chat-input" placeholder="Спроси или скомандуй..." autocomplete="off">
+          <button type="submit" class="panel__send">▶</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="bundle.js"></script>
+</body>
+</html>

@@ -1,0 +1,311 @@
+/* ------------------------------------------------------------------
+   Capri overlay styles
+   Flat, hard-edged, no gradients: Trigger cel style.
+   Every panel casts a violet misregistered copy.
+------------------------------------------------------------------- */
+
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('../../../node_modules/@fontsource/chakra-petch/files/chakra-petch-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('../../../node_modules/@fontsource/chakra-petch/files/chakra-petch-latin-700-normal.woff2') format('woff2');
+  font-weight: 700;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-cyrillic-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-display: block;
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('../../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-cyrillic-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-display: block;
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+/* Fallback for Chakra Petch in Cyrillic */
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('../../../node_modules/@fontsource/jetbrains-mono/files/jetbrains-mono-cyrillic-600-normal.woff2') format('woff2');
+  font-weight: 600 700;
+  font-display: block;
+  unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+
+:root {
+  --ink: #14101c;
+  --ink-2: #1e182b;
+  --paper: #fff4f6;
+  --paper-2: #d4cbd6;
+  --red: #ff2152;
+  --green: #36ff7a;
+  --violet: #7b3dff;
+  --blue: #3d6bff;
+
+  --font-display: 'Chakra Petch', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', Consolas, monospace;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: transparent !important;
+  user-select: none;
+  cursor: default;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Root character wrapper */
+#capri {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 10;
+  pointer-events: none;
+  will-change: transform;
+}
+
+#sprite {
+  display: block;
+  pointer-events: none;
+}
+
+/* Floating Action Ticker */
+#ticker {
+  position: absolute;
+  z-index: 15;
+  background: var(--ink);
+  color: var(--green);
+  border: 1px solid var(--green);
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  box-shadow: 4px 4px 0 var(--violet);
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+#ticker[hidden] {
+  display: none !important;
+}
+
+#ticker.is-thinking {
+  color: #bf80ff;
+  border-color: #bf80ff;
+  box-shadow: 4px 4px 0 var(--red);
+}
+
+/* Transmission Panel */
+#panel {
+  position: absolute;
+  z-index: 20;
+  width: 320px;
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--violet);
+  box-shadow: 6px 6px 0 var(--violet);
+  padding: 12px;
+  font-family: var(--font-display);
+  pointer-events: auto;
+  transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+}
+
+#panel[hidden] {
+  display: none !important;
+}
+
+.panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(123, 61, 255, 0.4);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+
+.panel__badge {
+  background: var(--green);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  letter-spacing: 0.5px;
+}
+
+.panel__badge.badge-offline {
+  background: var(--red);
+  color: var(--paper);
+}
+
+.panel__close {
+  background: transparent;
+  border: none;
+  color: var(--paper-2);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.panel__close:hover {
+  color: var(--red);
+}
+
+.panel__body {
+  display: flex;
+  gap: 10px;
+}
+
+.panel__face {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  background: var(--ink-2);
+  border: 1px solid var(--violet);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel__face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.panel__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel__text {
+  font-size: 14px;
+  line-height: 1.4;
+  margin: 0;
+  word-break: break-word;
+}
+
+.panel__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn {
+  background: var(--ink-2);
+  color: var(--paper);
+  border: 1px solid var(--green);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 6px 12px;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--green);
+}
+
+.btn:hover {
+  background: var(--green);
+  color: var(--ink);
+}
+
+.btn-danger {
+  border-color: var(--red);
+  box-shadow: 2px 2px 0 var(--red);
+}
+
+.btn-danger:hover {
+  background: var(--red);
+  color: var(--paper);
+}
+
+/* Chat Input Bar inside Panel */
+.panel__chat-form {
+  margin-top: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.panel__input {
+  flex: 1;
+  background: #0d0a14;
+  border: 1px solid var(--violet);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.panel__input:focus {
+  border-color: var(--green);
+}
+
+.panel__send {
+  background: var(--violet);
+  border: none;
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.panel__send:hover {
+  background: var(--green);
+  color: var(--ink);
+}
+
+/* Offline Banner */
+#offline-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 16, 28, 0.95);
+  border: 1px solid var(--red);
+  box-shadow: 4px 4px 0 var(--red);
+  color: var(--red);
+  padding: 6px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  z-index: 100;
+  pointer-events: none;
+}
+#offline-banner[hidden] {
+  display: none !important;
+}
