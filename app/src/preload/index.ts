@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('host', {
   onResize: on('overlay:resize'),
   onCursorPoll: on('overlay:cursor-poll'),
   onConfigChanged: on('config:changed'),
+  onWindowUpdate: on('window:update'),
 
   // Control actions
   setInteractive: (interactive: boolean) => {

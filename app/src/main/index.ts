@@ -6,12 +6,14 @@ import { CapriConfig, loadConfig, saveConfig } from './config';
 import { logger } from './logger';
 import { OverlayManager } from './overlay';
 import { TrayManager } from './tray';
+import { startWindowWatch, type WindowWatchHandle } from './windows';
 import { CapriWsServer } from './ws-server';
 
 let overlay: OverlayManager | null = null;
 let tray: TrayManager | null = null;
 let wsServer: CapriWsServer | null = null;
 let brain: BrainProcessManager | null = null;
+let windowWatch: WindowWatchHandle | null = null;
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
@@ -80,6 +82,13 @@ if (!gotTheLock) {
     // 7. Register IPC handlers
     registerIpc();
 
+    // 7b. Start Window Geometry Watcher (Win32)
+    windowWatch = startWindowWatch(win, (snapshot) => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('window:update', snapshot);
+      }
+    });
+
     // 8. Screen & Power monitoring
     screen.on('display-metrics-changed', () => overlay?.fitOverlay());
     screen.on('display-added', () => overlay?.fitOverlay());
@@ -122,6 +131,7 @@ if (!gotTheLock) {
   app.on('will-quit', async (e) => {
     logger.info('[main] Capri Host will quit. Cleaning up child processes...');
     globalShortcut.unregisterAll();
+    windowWatch?.stop();
     overlay?.destroy();
     tray?.destroy();
 

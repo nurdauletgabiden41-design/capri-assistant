@@ -22,6 +22,12 @@ async function build() {
     external: ['electron'],
   });
 
+  // 1b. Copy windows.ps1 helper next to main
+  const ps1Src = path.join(ROOT, 'app', 'src', 'main', 'windows.ps1');
+  if (fs.existsSync(ps1Src)) {
+    fs.copyFileSync(ps1Src, path.join(DIST, 'main', 'windows.ps1'));
+  }
+
   // 2. Build Preload Script
   console.log('[build] Compiling preload script...');
   await esbuild.build({

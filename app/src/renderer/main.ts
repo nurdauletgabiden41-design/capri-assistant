@@ -1,4 +1,6 @@
-import { CapriController } from './character/CapriController';
+// Adapted from mochiiwuff/capri-desktop (MIT)
+
+import { CapriController, WindowData } from './character/CapriController';
 import { Chip } from './character/Chip';
 import { getDemoSteps } from './demo/demoSequence';
 import { FxLayer } from './fx/FxLayer';
@@ -12,6 +14,7 @@ declare global {
       onResize: (cb: (d: any) => void) => () => void;
       onCursorPoll: (cb: (pos: any) => void) => () => void;
       onConfigChanged: (cb: (cfg: any) => void) => () => void;
+      onWindowUpdate: (cb: (data: WindowData) => void) => () => void;
       setInteractive: (on: boolean) => void;
       setNearTarget: (near: boolean) => void;
       setFocus: (on: boolean) => void;
@@ -106,6 +109,7 @@ async function bootstrap() {
   const tickerVerb = tickerEl.querySelector('.ticker__verb') as HTMLSpanElement;
   const tickerTarget = tickerEl.querySelector('.ticker__target') as HTMLSpanElement;
   const offlineBanner = document.getElementById('offline-banner') as HTMLDivElement;
+  const contextMenu = document.getElementById('context-menu') as HTMLDivElement;
 
   // 1. Initialize FX & Chip
   const fx = new FxLayer(fxCanvas);
@@ -123,7 +127,7 @@ async function bootstrap() {
   const textureSource: TexImageSource = spriteImg || makeFallbackTexture();
 
   // 3. Initialize WebGL Capri Controller
-  const capri = new CapriController(capriEl, canvasEl, textureSource);
+  const capri = new CapriController(capriEl, canvasEl, textureSource, fx);
 
   const cfg = await host.getConfig();
   capri.setScale(cfg.scale || 0.6);
@@ -150,6 +154,16 @@ async function bootstrap() {
   }
 
   capri.onMove = () => updatePanelPosition();
+
+  // Speech bubble notification line
+  capri.onSpeakLine = (line: string) => {
+    panelEl.hidden = false;
+    panelBadge.textContent = 'CAPRI';
+    panelBadge.className = 'panel__badge';
+    panelText.textContent = line;
+    setFace('smug');
+    updatePanelPosition();
+  };
 
   // Face switching with glitch effect
   const FACES = ['calm', 'aside', 'smug', 'wide', 'look', 'laugh', 'many', 'grin'];
@@ -180,15 +194,21 @@ async function bootstrap() {
       onPanel = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
     }
 
+    let onMenu = false;
+    if (!contextMenu.hidden) {
+      const r = contextMenu.getBoundingClientRect();
+      onMenu = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }
+
     const onChip = chip.contains(x, y);
     const onCapri = capri.hitTest(x, y);
 
-    const hit = onPanel || onChip || onCapri;
+    const hit = onPanel || onMenu || onChip || onCapri;
     setInteractive(hit);
 
     // Adaptive polling: 30 Hz when near, 5 Hz when far
     const dist = Math.hypot(x - capri.pos.x, y - (capri.pos.y - 200));
-    host.setNearTarget(dist < 260 || onPanel || onChip);
+    host.setNearTarget(dist < 260 || onPanel || onMenu || onChip);
   }
 
   function setInteractive(on: boolean) {
@@ -197,25 +217,55 @@ async function bootstrap() {
     host.setInteractive(on);
   }
 
+  function openContextMenu(x: number, y: number) {
+    const w = 210;
+    const h = 240;
+    const posX = Math.min(x, window.innerWidth - w - 10);
+    const posY = Math.min(y, window.innerHeight - h - 10);
+
+    contextMenu.style.left = `${posX}px`;
+    contextMenu.style.top = `${posY}px`;
+    contextMenu.hidden = false;
+    setInteractive(true);
+  }
+
+  function closeContextMenu() {
+    contextMenu.hidden = true;
+    if (mousePos) refreshHitTest(mousePos.x, mousePos.y);
+  }
+
+  // Pointer drag and click tracking
+  let mouseDownPos: { x: number; y: number } | null = null;
+  let lastClickTime = 0;
+  let dragOffset = { x: 0, y: 0 };
+
   window.addEventListener('mousemove', (e) => {
     mousePos = { x: e.clientX, y: e.clientY };
-    capri.touchActivity();
+
+    if (mouseDownPos && !capri.isDragging) {
+      const dist = Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y);
+      if (dist > 6) {
+        capri.isDragging = true;
+        dragOffset = {
+          x: capri.pos.x - mouseDownPos.x,
+          y: capri.pos.y - mouseDownPos.y,
+        };
+        closeContextMenu();
+        setInteractive(true);
+      }
+    }
 
     if (capri.isDragging) {
-      capri.pos = { x: e.clientX, y: e.clientY + 180 };
+      capri.pos = {
+        x: Math.max(40, Math.min(window.innerWidth - 40, e.clientX + dragOffset.x)),
+        y: Math.max(100, Math.min(capri.floor, e.clientY + dragOffset.y)),
+      };
       capri.place();
       return;
     }
 
-    // Turn toward cursor if idle
-    if (capri.stance === 'stand' && !capri.isSleeping) {
-      const shouldFace = e.clientX < capri.pos.x ? 1 : -1;
-      if (shouldFace !== capri.facing && Math.abs(e.clientX - capri.pos.x) > 60) {
-        capri.facing = shouldFace;
-        capri.playAct('turn');
-      }
-    }
-
+    // Notice cursor (head cocks, lightning zap, peek shy escape)
+    capri.notice(e.clientX, e.clientY);
     refreshHitTest(e.clientX, e.clientY);
   });
 
@@ -235,22 +285,110 @@ async function bootstrap() {
   });
 
   window.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && capri.hitTest(e.clientX, e.clientY)) {
-      capri.isDragging = true;
-      setInteractive(true);
-    }
-    if (chip.contains(e.clientX, e.clientY)) {
-      // Clicked biochip: restore Capri
-      chip.hide();
-      capri.unstow();
-      host.setConfig({ visible: true });
+    if (e.button === 0) {
+      if (!contextMenu.hidden) {
+        const r = contextMenu.getBoundingClientRect();
+        if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) {
+          closeContextMenu();
+        }
+      }
+
+      if (capri.hitTest(e.clientX, e.clientY)) {
+        mouseDownPos = { x: e.clientX, y: e.clientY };
+      }
+
+      if (chip.contains(e.clientX, e.clientY)) {
+        // Clicked biochip: restore Capri
+        chip.hide();
+        capri.unstow();
+        host.setConfig({ visible: true });
+      }
     }
   });
 
-  window.addEventListener('mouseup', () => {
-    if (capri.isDragging) {
-      capri.isDragging = false;
+  window.addEventListener('contextmenu', (e) => {
+    if (capri.hitTest(e.clientX, e.clientY)) {
+      e.preventDefault();
+      openContextMenu(e.clientX, e.clientY);
+    } else if (!contextMenu.hidden) {
+      closeContextMenu();
+    }
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) {
+      if (capri.isDragging) {
+        capri.isDragging = false;
+        capri.drop();
+      } else if (mouseDownPos && capri.hitTest(e.clientX, e.clientY)) {
+        // Click handling
+        const now = performance.now();
+        if (now - lastClickTime < 350) {
+          // Double click
+          capri.doubleClick();
+          lastClickTime = 0;
+        } else {
+          lastClickTime = now;
+          setTimeout(() => {
+            if (lastClickTime === now) {
+              // Single click action: speak status and show "Поговорим?"
+              panelEl.hidden = false;
+              panelBadge.textContent = 'CAPRI';
+              panelBadge.className = 'panel__badge';
+
+              if (capri.mode === 'offline') {
+                panelText.textContent = 'Конструкт оффлайн. Мозг не отвечает.';
+                setFace('laugh');
+              } else if (capri.mode === 'work') {
+                panelText.textContent = 'Работаю над задачей, не отвлекай~';
+                setFace('aside');
+              } else {
+                panelText.textContent = 'Привет! Чем займёмся? Могу открыть сайты, запустить тесты или поработать с файлами.';
+                setFace('smug');
+                panelActions.hidden = false;
+                panelActions.innerHTML = `<button class="btn" id="btn-talk">ПОГОВОРИМ?</button>`;
+                document.getElementById('btn-talk')?.addEventListener('click', () => {
+                  panelActions.hidden = true;
+                  chatInput.focus();
+                });
+              }
+              updatePanelPosition();
+            }
+          }, 240);
+        }
+      }
+      mouseDownPos = null;
       if (mousePos) refreshHitTest(mousePos.x, mousePos.y);
+    }
+  });
+
+  // Context Menu Item Actions
+  contextMenu.addEventListener('click', (e) => {
+    const item = (e.target as HTMLElement).closest('[data-action]') as HTMLElement;
+    if (!item) return;
+    const action = item.getAttribute('data-action');
+    closeContextMenu();
+
+    if (action === 'stow') {
+      capri.stow();
+      chip.show();
+      host.setConfig({ visible: false });
+    } else if (action === 'sleep') {
+      capri.setStance('sleep');
+      capri.isSleeping = true;
+    } else if (action === 'dance') {
+      capri.playAct('victory');
+      fx.showCutin('grin', 900);
+    } else if (action === 'talk') {
+      panelEl.hidden = false;
+      chatInput.focus();
+    } else if (action === 'settings') {
+      panelEl.hidden = false;
+      panelText.textContent = 'Конфигурация Capri: %APPDATA%\\Capri\\config.json';
+      setFace('look');
+      updatePanelPosition();
+    } else if (action === 'quit') {
+      host.quit();
     }
   });
 
@@ -282,17 +420,6 @@ async function bootstrap() {
     host.sendToBrain({ type: 'user_text', text });
   });
 
-  canvasEl.addEventListener('click', () => {
-    if (panelEl.hidden) {
-      panelEl.hidden = false;
-      panelText.textContent = capri.mode === 'offline'
-        ? 'Связь с мозгом потеряна. Проверь Python-процесс!'
-        : 'Привет, хост! Готова к работе.';
-      setFace(capri.mode === 'offline' ? 'laugh' : 'smug');
-      updatePanelPosition();
-    }
-  });
-
   // Host Commands (e.g. from tray or hotkey)
   host.onCommand((cmd) => {
     if (cmd.name === 'stow') {
@@ -311,6 +438,11 @@ async function bootstrap() {
   host.onResize(() => {
     fx.resize(window.innerWidth, window.innerHeight);
     chip.place(window.innerWidth, window.innerHeight);
+  });
+
+  // Window Tracking Event
+  host.onWindowUpdate?.((data: WindowData) => {
+    capri.setWindows(data);
   });
 
   // Brain Protocol Message Dispatcher
@@ -353,6 +485,9 @@ async function bootstrap() {
       capri.playAct('talk');
       updatePanelPosition();
     } else if (type === 'tool_start') {
+      // Capri settles on the active window when working
+      capri.goToWork();
+
       tickerEl.hidden = false;
       tickerEl.className = '';
       tickerVerb.textContent = msg.ticker || `${msg.tool.toUpperCase()}`;
@@ -365,7 +500,6 @@ async function bootstrap() {
         }
       }, 1500);
     } else if (type === 'needs_approval') {
-      // Mane bristles, alert cutin, teleport next to cursor
       if (mousePos) {
         capri.pos = { x: mousePos.x + 80, y: mousePos.y + 100 };
       }
@@ -456,7 +590,7 @@ async function bootstrap() {
   }
   requestAnimationFrame(renderLoop);
 
-  console.log('[renderer] Stage 2 Character Controller initialized.');
+  console.log('[renderer] Stage 3 Window Tracking & Behaviours Controller initialized.');
 }
 
 if (document.readyState === 'loading') {
