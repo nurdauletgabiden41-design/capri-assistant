@@ -1,5 +1,7 @@
-import { SpriteController } from './character/SpriteController';
+import { CapriController } from './character/CapriController';
+import { Chip } from './character/Chip';
 import { getDemoSteps } from './demo/demoSequence';
+import { FxLayer } from './fx/FxLayer';
 
 declare global {
   interface Window {
@@ -26,9 +28,72 @@ declare global {
 
 const host = window.host;
 
+async function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function makeFallbackTexture(): HTMLCanvasElement {
+  const w = 240;
+  const h = 420;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d')!;
+
+  // Spiked hot red mane
+  ctx.fillStyle = '#ff2152';
+  ctx.beginPath();
+  ctx.moveTo(116, 30);
+  ctx.lineTo(195, 75);
+  ctx.lineTo(215, 155);
+  ctx.lineTo(175, 235);
+  ctx.lineTo(135, 265);
+  ctx.lineTo(110, 265);
+  ctx.lineTo(75, 235);
+  ctx.lineTo(35, 155);
+  ctx.lineTo(55, 75);
+  ctx.closePath();
+  ctx.fill();
+
+  // Green mask
+  ctx.fillStyle = '#36ff7a';
+  ctx.beginPath();
+  ctx.moveTo(92, 105);
+  ctx.lineTo(152, 105);
+  ctx.lineTo(146, 168);
+  ctx.lineTo(94, 168);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eyes
+  ctx.fillStyle = '#14101c';
+  ctx.fillRect(102, 122, 14, 10);
+  ctx.fillRect(130, 122, 14, 10);
+  ctx.fillStyle = '#3d6bff';
+  ctx.fillRect(105, 124, 7, 6);
+  ctx.fillRect(133, 124, 7, 6);
+
+  // Torso & legs
+  ctx.fillStyle = '#14101c';
+  ctx.fillRect(106, 195, 30, 85);
+  ctx.fillStyle = '#36ff7a';
+  ctx.fillRect(99, 280, 15, 125);
+  ctx.fillRect(128, 280, 15, 125);
+
+  return c;
+}
+
 async function bootstrap() {
   const capriEl = document.getElementById('capri') as HTMLDivElement;
   const canvasEl = document.getElementById('sprite') as HTMLCanvasElement;
+  const fxCanvas = document.getElementById('fx') as HTMLCanvasElement;
+  const chipCanvas = document.getElementById('chip') as HTMLCanvasElement;
+
   const panelEl = document.getElementById('panel') as HTMLDivElement;
   const panelText = document.getElementById('panel-text') as HTMLParagraphElement;
   const panelBadge = panelEl.querySelector('.panel__badge') as HTMLSpanElement;
@@ -42,55 +107,60 @@ async function bootstrap() {
   const tickerTarget = tickerEl.querySelector('.ticker__target') as HTMLSpanElement;
   const offlineBanner = document.getElementById('offline-banner') as HTMLDivElement;
 
-  const sprite = new SpriteController(canvasEl);
+  // 1. Initialize FX & Chip
+  const fx = new FxLayer(fxCanvas);
+  const chip = new Chip(chipCanvas);
+  chip.place(window.innerWidth, window.innerHeight);
 
-  // Load config & sprite asset
+  // Load cut-in assets
+  const cutinNames = ['grin', 'laugh', 'eyes', 'many', 'look'];
+  for (const name of cutinNames) {
+    fx.loadCutin(name, `../assets/capri/cutin-${name}.png`);
+  }
+
+  // 2. Load character sprite texture (or graceful fallback)
+  const spriteImg = await loadImage('../assets/capri/capri-full.png');
+  const textureSource: TexImageSource = spriteImg || makeFallbackTexture();
+
+  // 3. Initialize WebGL Capri Controller
+  const capri = new CapriController(capriEl, canvasEl, textureSource);
+
   const cfg = await host.getConfig();
-  sprite.scale = cfg.scale || 0.6;
+  capri.setScale(cfg.scale || 0.6);
+  capri.wander = cfg.wander ?? true;
 
-  // Initial placement near bottom-right
-  sprite.pos = {
+  // Position Capri in bottom-right corner
+  capri.pos = {
     x: window.innerWidth - 220,
     y: window.innerHeight - 20,
   };
+  capri.place();
 
-  // Attempt to load character atlas or fallback
-  await sprite.init('../assets/capri/capri-full.png');
-
-  // Place character in DOM
-  function updateCapriTransform() {
-    const s = sprite.scale;
-    const pad = 56;
-    const w = 240;
-    const h = 420;
-    const left = sprite.pos.x - (pad + w * 0.5) * s;
-    const top = sprite.pos.y - (pad + h) * s;
-    capriEl.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
-
-    // Position panel to her side
+  function updatePanelPosition() {
     if (!panelEl.hidden) {
-      const panelX = Math.max(20, Math.min(window.innerWidth - 340, sprite.pos.x - 340));
-      const panelY = Math.max(40, sprite.pos.y - 320);
+      const panelX = Math.max(20, Math.min(window.innerWidth - 340, capri.pos.x - 340));
+      const panelY = Math.max(40, capri.pos.y - 320);
       panelEl.style.left = `${panelX}px`;
       panelEl.style.top = `${panelY}px`;
     }
-
-    // Position ticker over her head
     if (!tickerEl.hidden) {
-      tickerEl.style.left = `${Math.round(sprite.pos.x - 40)}px`;
-      tickerEl.style.top = `${Math.round(top - 24)}px`;
+      tickerEl.style.left = `${Math.round(capri.pos.x - 40)}px`;
+      tickerEl.style.top = `${Math.round(capri.pos.y - 420 * capri.scale - 20)}px`;
     }
   }
 
-  updateCapriTransform();
+  capri.onMove = () => updatePanelPosition();
 
-  // Face portrait helper
+  // Face switching with glitch effect
+  const FACES = ['calm', 'aside', 'smug', 'wide', 'look', 'laugh', 'many', 'grin'];
   function setFace(faceName: string) {
-    panelFace.src = `../assets/capri/face-${faceName}.png`;
+    const valid = FACES.includes(faceName) ? faceName : 'smug';
+    panelFace.classList.add('is-swapping');
+    panelFace.src = `../assets/capri/face-${valid}.png`;
     panelFace.onerror = () => {
-      // Fallback if specific face image not found
       panelFace.src = '../assets/capri/capri-face.png';
     };
+    setTimeout(() => panelFace.classList.remove('is-swapping'), 150);
   }
   setFace('smug');
 
@@ -99,27 +169,26 @@ async function bootstrap() {
   let mousePos: { x: number; y: number } | null = null;
 
   function refreshHitTest(x: number, y: number) {
-    if (sprite.isDragging) {
+    if (capri.isDragging) {
       setInteractive(true);
       return;
     }
 
-    // Check panel rect
     let onPanel = false;
     if (!panelEl.hidden) {
-      const rect = panelEl.getBoundingClientRect();
-      onPanel = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      const r = panelEl.getBoundingClientRect();
+      onPanel = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
     }
 
-    // Check pixel-precise sprite body
-    const onSprite = sprite.hitTest(x, y);
+    const onChip = chip.contains(x, y);
+    const onCapri = capri.hitTest(x, y);
 
-    const hit = onPanel || onSprite;
+    const hit = onPanel || onChip || onCapri;
     setInteractive(hit);
 
-    // Adaptive cursor polling frequency: near if within 250px
-    const dist = Math.hypot(x - sprite.pos.x, y - (sprite.pos.y - 200));
-    host.setNearTarget(dist < 250 || onPanel);
+    // Adaptive polling: 30 Hz when near, 5 Hz when far
+    const dist = Math.hypot(x - capri.pos.x, y - (capri.pos.y - 200));
+    host.setNearTarget(dist < 260 || onPanel || onChip);
   }
 
   function setInteractive(on: boolean) {
@@ -130,46 +199,62 @@ async function bootstrap() {
 
   window.addEventListener('mousemove', (e) => {
     mousePos = { x: e.clientX, y: e.clientY };
-    if (sprite.isDragging) {
-      sprite.pos = { x: e.clientX, y: e.clientY + 180 };
-      updateCapriTransform();
+    capri.touchActivity();
+
+    if (capri.isDragging) {
+      capri.pos = { x: e.clientX, y: e.clientY + 180 };
+      capri.place();
       return;
     }
+
+    // Turn toward cursor if idle
+    if (capri.stance === 'stand' && !capri.isSleeping) {
+      const shouldFace = e.clientX < capri.pos.x ? 1 : -1;
+      if (shouldFace !== capri.facing && Math.abs(e.clientX - capri.pos.x) > 60) {
+        capri.facing = shouldFace;
+        capri.playAct('turn');
+      }
+    }
+
     refreshHitTest(e.clientX, e.clientY);
   });
 
   window.addEventListener('mouseleave', () => {
     mousePos = null;
-    if (!sprite.isDragging) {
+    if (!capri.isDragging) {
       setInteractive(false);
       host.setNearTarget(false);
     }
   });
 
-  // Host cursor polling fallback
   host.onCursorPoll((pos) => {
-    if (pos.inside && !sprite.isDragging) {
+    if (pos.inside && !capri.isDragging) {
       mousePos = { x: pos.x, y: pos.y };
       refreshHitTest(pos.x, pos.y);
     }
   });
 
-  // Dragging interaction
   window.addEventListener('mousedown', (e) => {
-    if (e.button === 0 && sprite.hitTest(e.clientX, e.clientY)) {
-      sprite.isDragging = true;
+    if (e.button === 0 && capri.hitTest(e.clientX, e.clientY)) {
+      capri.isDragging = true;
       setInteractive(true);
+    }
+    if (chip.contains(e.clientX, e.clientY)) {
+      // Clicked biochip: restore Capri
+      chip.hide();
+      capri.unstow();
+      host.setConfig({ visible: true });
     }
   });
 
   window.addEventListener('mouseup', () => {
-    if (sprite.isDragging) {
-      sprite.isDragging = false;
+    if (capri.isDragging) {
+      capri.isDragging = false;
       if (mousePos) refreshHitTest(mousePos.x, mousePos.y);
     }
   });
 
-  // Chat input focus routing
+  // Focus management
   chatInput.addEventListener('focus', () => host.setFocus(true));
   chatInput.addEventListener('blur', () => host.setFocus(false));
   chatInput.addEventListener('keydown', (e) => {
@@ -193,35 +278,57 @@ async function bootstrap() {
 
     panelText.textContent = 'Обрабатываю...';
     setFace('calm');
+    capri.playAct('talk');
     host.sendToBrain({ type: 'user_text', text });
   });
 
-  // Show panel on sprite click
   canvasEl.addEventListener('click', () => {
     if (panelEl.hidden) {
       panelEl.hidden = false;
-      panelText.textContent = sprite.isOnline
-        ? 'Привет, хост! Чем займемся?'
-        : 'Связь с мозгом потеряна. Проверь Python-процесс!';
-      updateCapriTransform();
+      panelText.textContent = capri.mode === 'offline'
+        ? 'Связь с мозгом потеряна. Проверь Python-процесс!'
+        : 'Привет, хост! Готова к работе.';
+      setFace(capri.mode === 'offline' ? 'laugh' : 'smug');
+      updatePanelPosition();
     }
   });
 
-  // Brain event dispatcher
+  // Host Commands (e.g. from tray or hotkey)
+  host.onCommand((cmd) => {
+    if (cmd.name === 'stow') {
+      if (cmd.on) {
+        capri.stow();
+        chip.show();
+      } else {
+        chip.hide();
+        capri.unstow();
+      }
+    } else if (cmd.name === 'teleport') {
+      capri.playAct('hop');
+    }
+  });
+
+  host.onResize(() => {
+    fx.resize(window.innerWidth, window.innerHeight);
+    chip.place(window.innerWidth, window.innerHeight);
+  });
+
+  // Brain Protocol Message Dispatcher
   host.onBrainEvent((msg: any) => {
     const type = msg.type;
 
     if (type === 'session_start') {
-      sprite.isOnline = true;
+      capri.mode = 'idle';
       offlineBanner.hidden = true;
       panelBadge.textContent = 'ONLINE';
       panelBadge.className = 'panel__badge';
       panelEl.hidden = false;
       panelText.textContent = `Капри онлайн! Модель: ${msg.active_model || 'Haiku'}`;
       setFace('smug');
-      updateCapriTransform();
+      capri.playAct('hop');
+      updatePanelPosition();
     } else if (type === 'session_offline') {
-      sprite.isOnline = false;
+      capri.mode = 'offline';
       offlineBanner.hidden = false;
       panelBadge.textContent = 'OFFLINE';
       panelBadge.className = 'panel__badge badge-offline';
@@ -232,7 +339,8 @@ async function bootstrap() {
       tickerEl.className = 'is-thinking';
       tickerVerb.textContent = 'THINKING...';
       tickerTarget.textContent = '';
-      updateCapriTransform();
+      capri.playAct('curious', capri.facing);
+      updatePanelPosition();
     } else if (type === 'thinking_tick') {
       tickerVerb.textContent = `THINKING... ${msg.elapsed_sec}s`;
     } else if (type === 'thinking_end') {
@@ -242,13 +350,14 @@ async function bootstrap() {
       panelText.textContent = msg.text || '';
       if (msg.face) setFace(msg.face);
       if (msg.badge) panelBadge.textContent = msg.badge;
-      updateCapriTransform();
+      capri.playAct('talk');
+      updatePanelPosition();
     } else if (type === 'tool_start') {
       tickerEl.hidden = false;
       tickerEl.className = '';
       tickerVerb.textContent = msg.ticker || `${msg.tool.toUpperCase()}`;
       tickerTarget.textContent = msg.target || '';
-      updateCapriTransform();
+      updatePanelPosition();
     } else if (type === 'tool_end') {
       setTimeout(() => {
         if (!tickerEl.classList.contains('is-thinking')) {
@@ -256,10 +365,13 @@ async function bootstrap() {
         }
       }, 1500);
     } else if (type === 'needs_approval') {
-      // Teleport next to cursor and prompt
+      // Mane bristles, alert cutin, teleport next to cursor
       if (mousePos) {
-        sprite.pos = { x: mousePos.x + 80, y: mousePos.y + 100 };
+        capri.pos = { x: mousePos.x + 80, y: mousePos.y + 100 };
       }
+      capri.playAct('alarm', capri.facing);
+      fx.showCutin('many', 900);
+
       panelEl.hidden = false;
       panelBadge.textContent = 'APPROVAL';
       panelBadge.className = 'panel__badge badge-offline';
@@ -281,18 +393,23 @@ async function bootstrap() {
         host.sendToBrain({ type: 'approval_response', id: msg.id, approved: false });
       });
 
-      updateCapriTransform();
+      updatePanelPosition();
     } else if (type === 'approval_resolved') {
       panelActions.hidden = true;
       panelText.textContent = msg.approved ? 'Действие подтверждено!' : 'Действие отклонено пользователем.';
       setFace(msg.approved ? 'smug' : 'aside');
+      capri.playAct(msg.approved ? 'hop' : 'flinch');
     } else if (type === 'task_done') {
+      // Victory sequence & cut-in
+      capri.playAct('victory', capri.facing);
+      fx.showCutin('grin', 1100);
+
       panelEl.hidden = false;
       panelBadge.textContent = 'VICTORY';
       panelBadge.className = 'panel__badge';
       panelText.textContent = `Задача выполнена!\n${msg.last_sentence}`;
       setFace('laugh');
-      updateCapriTransform();
+      updatePanelPosition();
     }
   });
 
@@ -303,6 +420,7 @@ async function bootstrap() {
     panelEl.hidden = false;
     panelText.textContent = 'Запуск демонстрационной сессии...';
     setFace('wide');
+    capri.wake();
 
     const steps = getDemoSteps('ru');
     let idx = 0;
@@ -311,41 +429,38 @@ async function bootstrap() {
       if (idx >= steps.length) return;
       const step = steps[idx++];
       demoTimer = setTimeout(() => {
-        // Dispatch step event through event handler
-        const eventHandler = (window as any).__onDemoEvent;
-        if (eventHandler) eventHandler(step.event);
+        const listeners = (window as any).__brainListeners || [];
+        for (const fn of listeners) fn(step.event);
         playNext();
       }, step.delay);
-    };
-
-    (window as any).__onDemoEvent = (event: any) => {
-      // Feed through standard brain event pipeline
-      const listeners = (window as any).__brainListeners || [];
-      for (const fn of listeners) fn(event);
     };
 
     playNext();
   });
 
-  // Wire demo events to main event listener
   const brainListeners: ((msg: any) => void)[] = [];
   (window as any).__brainListeners = brainListeners;
   host.onBrainEvent((msg) => {
     for (const fn of brainListeners) fn(msg);
   });
 
-  // Render loop (12 fps on twos)
+  // Optimized Render Loop: 12 fps on twos, 24 fps during actions
   function renderLoop(time: number) {
-    sprite.update(time);
+    if (!capri.isStowed) {
+      capri.update(time);
+      fx.update(time);
+    } else if (chip.visible) {
+      chip.draw();
+    }
     requestAnimationFrame(renderLoop);
   }
   requestAnimationFrame(renderLoop);
 
-  loggerReady();
+  console.log('[renderer] Stage 2 Character Controller initialized.');
 }
 
-function loggerReady() {
-  console.log('[renderer] Capri Renderer initialized.');
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', bootstrap);
+} else {
+  bootstrap();
 }
-
-window.addEventListener('DOMContentLoaded', bootstrap);

@@ -60,6 +60,14 @@ async function build() {
     }
   }
 
+  // 5. Copy Assets if present (optional/personal use)
+  const assetsSrc = path.join(ROOT, 'app', 'assets');
+  const assetsDst = path.join(DIST, 'assets');
+  if (fs.existsSync(assetsSrc)) {
+    console.log('[build] Copying app assets to dist/assets...');
+    fs.cpSync(assetsSrc, assetsDst, { recursive: true });
+  }
+
   console.log('[build] Build completed successfully.');
 }
 

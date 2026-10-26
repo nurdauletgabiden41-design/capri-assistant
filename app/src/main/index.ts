@@ -89,16 +89,23 @@ if (!gotTheLock) {
     powerMonitor.on('unlock-screen', () => setTimeout(() => overlay?.rearm(), 1000));
 
     // Check for --demo or --capture flags
-    if (process.argv.includes('--demo') || process.argv.includes('--capture')) {
+    const captureArg = process.argv.find((a) => a.startsWith('--capture'));
+    if (process.argv.includes('--demo') || captureArg) {
       setTimeout(() => triggerDemo(), 1500);
     }
 
-    if (process.argv.includes('--capture')) {
+    if (captureArg) {
       setTimeout(async () => {
         try {
           const screensDir = path.join(projectRoot, 'docs', 'screens');
           fs.mkdirSync(screensDir, { recursive: true });
-          const screenFile = path.join(screensDir, 'stage1-demo.png');
+          let targetName = 'stage1-demo.png';
+          if (captureArg.includes('=')) {
+            targetName = captureArg.split('=')[1];
+          } else if (process.env.CAPTURE_FILE) {
+            targetName = process.env.CAPTURE_FILE;
+          }
+          const screenFile = path.join(screensDir, targetName);
           logger.info(`[main] Capturing overlay screenshot to ${screenFile}...`);
           const image = await win.webContents.capturePage();
           fs.writeFileSync(screenFile, image.toPNG());

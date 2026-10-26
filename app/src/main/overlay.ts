@@ -83,6 +83,10 @@ export class OverlayManager {
       logger.error(`[overlay] Renderer gone: ${details.reason}`);
     });
 
+    win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+      logger.info(`[renderer:${level}] ${message} (${sourceId}:${line})`);
+    });
+
     this.window = win;
     return win;
   }
