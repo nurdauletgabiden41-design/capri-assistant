@@ -75,11 +75,11 @@ This checklist must be verified at the end of each development stage before crea
 
 ## 7. Safety, Sandboxing & Credential Integrity
 
-- [ ] **Path Sandboxing:** File operations (`list_dir`, `read_file`, `write_file`, `edit_file`) strictly confined to `allowed_dirs`; path traversal (`..`), absolute escapes, and symlink breaks are rejected.
-- [ ] **Destructive Action Block:** File deletion, git history rewriting, and arbitrary system configuration changes are completely disallowed.
-- [ ] **Strict Approval Gate:**
+- [x] **Path Sandboxing:** File operations (`list_dir`, `read_file`, `write_file`, `edit_file`) strictly confined to `allowed_dirs`; path traversal (`..`), absolute escapes, and symlink breaks are rejected.
+- [x] **Destructive Action Block:** File deletion, git history rewriting, and arbitrary system configuration changes are completely disallowed.
+- [x] **Strict Approval Gate:**
   - `write_file`, `edit_file`, `run_python`, `close_app` always require explicit UI button click from the user.
   - Keyboard auto-confirmations or automatic approve timeouts are strictly forbidden.
-- [ ] **Prompt Injection Mitigation:** Untrusted file or web content is isolated within data envelopes, instructing the LLM to ignore embedded commands.
+- [x] **Prompt Injection Mitigation:** Untrusted file or web content is isolated within data envelopes, instructing the LLM to ignore embedded commands.
 - [x] **Credential Security:** API keys stored exclusively in Windows Credential Manager via `keyring`. Zero plain-text keys in logs, config files, git commits, or IPC messages.
-- [ ] **Action Logging:** All executed actions logged to `actions.log` with timestamps, action kind, and status, without recording secrets or sensitive file payloads.
+- [x] **Action Logging:** All executed actions logged to `actions.log` with timestamps, action kind, and status, without recording secrets or sensitive file payloads.

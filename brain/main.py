@@ -6,10 +6,12 @@ authenticates with the handshake token, and processes assistant events.
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import signal
 import sys
+import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -20,6 +22,9 @@ from brain.llm.client import OpenRouterClient
 from brain.llm.persona import build_system_prompt
 from brain.memory.store import MemoryStore
 from brain.security import keychain
+from brain.security.approval import HostApprovalGate
+from brain.security.audit import ActionLogger
+from brain.tools.registry import ToolRegistry
 
 VERSION = "0.1.0"
 DEFAULT_MODEL = "anthropic/claude-haiku-5.5"
@@ -43,11 +48,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger("capri.brain")
 
-# Initialize persistent memory and budget tracker
+# Initialize persistent memory, budget tracker, approval gate, and tool registry
 memory_store = MemoryStore()
 budget_tracker = BudgetTracker(store=memory_store)
 current_session_id = str(uuid.uuid4())
 session_start_time = datetime.now(UTC).isoformat()
+approval_gate = HostApprovalGate()
+action_logger = ActionLogger()
+tool_registry = ToolRegistry(action_logger=action_logger)
 
 
 async def handle_user_text(client: BrainWsClient, text: str) -> None:
@@ -131,15 +139,23 @@ async def handle_user_text(client: BrainWsClient, text: str) -> None:
 
     llm_client = OpenRouterClient(api_key=api_key)
     full_reply: list[str] = []
+    tool_calls_to_execute: list[dict[str, Any]] = []
     tokens_in = 0
     tokens_out = 0
     model_used = DEFAULT_MODEL
+    start_time = time.time()
+    actions_count = 0
+    files_changed = 0
 
     try:
-        async for chunk in llm_client.stream_chat(llm_messages, max_tokens=1024):
+        openai_tools = tool_registry.get_openai_tools()
+        async for chunk in llm_client.stream_chat(llm_messages, tools=openai_tools, max_tokens=1024):
             if chunk.delta:
                 full_reply.append(chunk.delta)
                 await client.send({"type": "assistant_delta", "text": chunk.delta})
+
+            if chunk.tool_calls:
+                tool_calls_to_execute.extend(chunk.tool_calls)
 
             if chunk.usage:
                 tokens_in = chunk.usage.get("tokens_in", 0)
@@ -150,31 +166,92 @@ async def handle_user_text(client: BrainWsClient, text: str) -> None:
 
         await client.send({"type": "thinking_end"})
 
-        complete_text = "".join(full_reply).strip()
-        if not complete_text:
-            complete_text = "Готово. Системы в норме."
+        # If tools were invoked by LLM, execute them and perform follow-up turn
+        if tool_calls_to_execute:
+            llm_messages.append(
+                {
+                    "role": "assistant",
+                    "content": "".join(full_reply) if full_reply else None,
+                    "tool_calls": tool_calls_to_execute,
+                }
+            )
+
+            for tc in tool_calls_to_execute:
+                fn = tc.get("function", {})
+                tool_name = fn.get("name", "")
+                raw_args = fn.get("arguments", "{}")
+                try:
+                    args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                except Exception:
+                    args = {}
+
+                tool_result = await tool_registry.execute(
+                    name=tool_name,
+                    arguments=args,
+                    approval_gate=approval_gate,
+                    client=client,
+                )
+                actions_count += 1
+                if tool_name in ("write_file", "edit_file") and tool_result.ok:
+                    files_changed += 1
+
+                llm_messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", f"call_{actions_count}"),
+                        "name": tool_name,
+                        "content": json.dumps(tool_result.to_dict(), ensure_ascii=False),
+                    }
+                )
+
+            # Follow-up turn: stream Capri's final commentary
+            await client.send({"type": "thinking_start"})
+            followup_reply: list[str] = []
+            async for chunk in llm_client.stream_chat(llm_messages, max_tokens=512):
+                if chunk.delta:
+                    followup_reply.append(chunk.delta)
+                    await client.send({"type": "assistant_delta", "text": chunk.delta})
+
+                if chunk.usage:
+                    tokens_in += chunk.usage.get("tokens_in", 0)
+                    tokens_out += chunk.usage.get("tokens_out", 0)
+
+            await client.send({"type": "thinking_end"})
+            complete_text = "".join(followup_reply).strip() or "Готово! Все операции завершены."
+        else:
+            complete_text = "".join(full_reply).strip() or "Готово. Системы в норме."
 
         # Pick appropriate face
         face = "smug"
         if "?" in complete_text:
-            face = (
-                "curious"
-                if "curious" in ["calm", "aside", "smug", "wide", "look", "laugh", "many", "grin"]
-                else "look"
-            )
-        elif "ошибк" in complete_text.lower():
+            face = "look"
+        elif "ошибк" in complete_text.lower() or "declined" in complete_text.lower():
             face = "aside"
+        elif actions_count > 0:
+            face = "laugh"
 
         await client.send(
             {
                 "type": "assistant_message",
                 "text": complete_text,
-                "face": face
-                if face in ["calm", "aside", "smug", "wide", "look", "laugh", "many", "grin"]
-                else "smug",
+                "face": face,
                 "badge": "CAPRI",
             }
         )
+
+        # Emit task_done if actions were carried out
+        duration_ms = int((time.time() - start_time) * 1000)
+        if actions_count > 0:
+            last_sentence = complete_text.split(".")[-2] if "." in complete_text else complete_text
+            await client.send(
+                {
+                    "type": "task_done",
+                    "actions": actions_count,
+                    "files_changed": files_changed,
+                    "duration_ms": duration_ms,
+                    "last_sentence": last_sentence.strip(),
+                }
+            )
 
         # Store reply in memory
         memory_store.add_message(
@@ -188,11 +265,11 @@ async def handle_user_text(client: BrainWsClient, text: str) -> None:
         memory_store.record_session(
             session_id=current_session_id,
             started_at=session_start_time,
-            duration_ms=0,
+            duration_ms=duration_ms,
             cost_usd=cost_usd,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
-            actions_count=0,
+            actions_count=actions_count,
         )
 
         today = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -234,6 +311,7 @@ async def handle_host_message(client: BrainWsClient, msg: dict[str, Any]) -> Non
         appr_id = msg.get("id", "")
         approved = bool(msg.get("approved"))
         logger.info("Approval response received: %s -> %s", appr_id, approved)
+        approval_gate.resolve_approval(appr_id, approved)
         await client.send(
             {
                 "type": "approval_resolved",
@@ -241,6 +319,10 @@ async def handle_host_message(client: BrainWsClient, msg: dict[str, Any]) -> Non
                 "approved": approved,
             }
         )
+
+    elif msg_type == "abort":
+        logger.info("Abort received from Host. Cancelling active approval gates.")
+        approval_gate.cancel_all()
 
 
 async def main() -> None:

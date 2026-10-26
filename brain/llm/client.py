@@ -19,13 +19,13 @@ class LlmResponseChunk:
     def __init__(
         self,
         delta: str | None = None,
-        tool_call: dict[str, Any] | None = None,
+        tool_calls: list[dict[str, Any]] | None = None,
         finish_reason: str | None = None,
         usage: dict[str, Any] | None = None,
         model_used: str | None = None,
     ) -> None:
         self.delta = delta
-        self.tool_call = tool_call
+        self.tool_calls = tool_calls or []
         self.finish_reason = finish_reason
         self.usage = usage
         self.model_used = model_used
@@ -76,6 +76,7 @@ class OpenRouterClient:
                 stream = await self._client.chat.completions.create(**kwargs)
                 tokens_in = 0
                 tokens_out = 0
+                tool_calls_map: dict[int, dict[str, Any]] = {}
 
                 async for chunk in stream:
                     # Capture token usage if reported by OpenRouter stream
@@ -90,6 +91,28 @@ class OpenRouterClient:
                     delta_text = choice.delta.content if choice.delta else None
                     finish_reason = choice.finish_reason
 
+                    # Accumulate tool calls if streamed
+                    if choice.delta and getattr(choice.delta, "tool_calls", None):
+                        for tc in choice.delta.tool_calls:
+                            idx = tc.index
+                            if idx not in tool_calls_map:
+                                tool_calls_map[idx] = {
+                                    "id": tc.id or f"call_{idx}",
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc.function.name if (tc.function and tc.function.name) else "",
+                                        "arguments": "",
+                                    },
+                                }
+                            else:
+                                if tc.id:
+                                    tool_calls_map[idx]["id"] = tc.id
+                                if tc.function:
+                                    if tc.function.name:
+                                        tool_calls_map[idx]["function"]["name"] += tc.function.name
+                                    if tc.function.arguments:
+                                        tool_calls_map[idx]["function"]["arguments"] += tc.function.arguments
+
                     # Rough estimate if not directly reported by stream
                     if delta_text:
                         tokens_out += max(1, len(delta_text) // 4)
@@ -100,9 +123,17 @@ class OpenRouterClient:
                         model_used=model,
                     )
 
+                accumulated_tools = [tool_calls_map[i] for i in sorted(tool_calls_map.keys())]
+                if accumulated_tools:
+                    yield LlmResponseChunk(
+                        tool_calls=accumulated_tools,
+                        finish_reason="tool_calls",
+                        model_used=model,
+                    )
+
                 if tokens_in == 0:
                     # Estimate prompt tokens from message chars if unreturned
-                    tokens_in = sum(len(m.get("content", "")) for m in messages) // 4
+                    tokens_in = sum(len(m.get("content", "")) for m in messages if isinstance(m.get("content"), str)) // 4
 
                 yield LlmResponseChunk(
                     finish_reason="stop",
