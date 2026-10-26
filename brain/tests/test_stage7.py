@@ -1,5 +1,6 @@
 """Unit and integration tests for Stage 7 Voice (PTT, STT, Neural TTS, and Lip-Sync)."""
 
+import base64
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -65,7 +66,7 @@ def test_whisper_transcriber_mocked():
     mock_model.transcribe.return_value = ([mock_segment], mock_info)
     transcriber._model = mock_model
 
-    result = transcriber.transcribe(b"FAKE_WAV_HEADER_AND_SAMPLES")
+    result = transcriber.transcribe(b"RIFF" + b"\x00" * 1600)
     assert result == "запусти калькулятор"
 
 
@@ -85,7 +86,7 @@ async def test_voice_manager_ptt_lifecycle():
 
     # 2. PTT Stop with base64 audio payload
     mock_client.send.reset_mock()
-    fake_b64_audio = "data:audio/wav;base64,UklGRgAAAABXQVZFZm10"
+    fake_b64_audio = "data:audio/wav;base64," + base64.b64encode(b"RIFF" + b"\x00" * 1600).decode("ascii")
     transcribed = await vm.handle_ptt_stop(mock_client, audio_payload=fake_b64_audio)
 
     assert transcribed == "открой браузер"

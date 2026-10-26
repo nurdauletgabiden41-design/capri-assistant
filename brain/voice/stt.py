@@ -55,6 +55,10 @@ class WhisperTranscriber:
         try:
             if isinstance(audio_input, (bytes, io.BytesIO)):
                 raw_bytes = audio_input.getvalue() if isinstance(audio_input, io.BytesIO) else audio_input
+                if len(raw_bytes) < 800:
+                    logger.info("Audio payload too short (%s bytes), skipping transcription.", len(raw_bytes))
+                    return ""
+
                 suffix = ".wav" if raw_bytes.startswith(b"RIFF") else ".webm"
                 with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                     tmp.write(raw_bytes)
@@ -77,8 +81,8 @@ class WhisperTranscriber:
             return full_transcript
 
         except Exception as err:
-            logger.error("Whisper transcription error: %s", err)
-            raise
+            logger.warning("Whisper transcription skipped (unreadable or empty audio): %s", err)
+            return ""
         finally:
             if temp_path and temp_path.exists():
                 try:

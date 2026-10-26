@@ -117,8 +117,6 @@ async function bootstrap() {
   const waveBars = panelWave?.querySelectorAll('.panel__wave-bar') as NodeListOf<HTMLDivElement> | null;
 
   let currentAudio: HTMLAudioElement | null = null;
-  let mediaRecorder: MediaRecorder | null = null;
-  let audioChunks: Blob[] = [];
 
   // 1. Initialize FX & Chip
   const fx = new FxLayer(fxCanvas);
@@ -488,19 +486,75 @@ async function bootstrap() {
     host.sendToBrain({ type: 'user_text', text });
   });
 
-  // Push-To-Talk Button Handler
+  // Audio WAV Encoder for 16kHz Whisper STT
+  function encodeWav(samples: Float32Array, sampleRate: number): string {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    const writeStr = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    };
+
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, 1, true); // Mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeStr(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunk = 8192;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
+    }
+    return 'data:audio/wav;base64,' + btoa(binary);
+  }
+
+  // Push-To-Talk Button Handler (16kHz PCM WAV)
+  let audioCtx: AudioContext | null = null;
+  let micStream: MediaStream | null = null;
+  let scriptProcessor: ScriptProcessorNode | null = null;
+  let recordedPcm: Float32Array[] = [];
+
   if (btnPtt) {
     const startPtt = async () => {
       btnPtt.classList.add('is-recording');
       host.sendToBrain({ type: 'ptt_start' });
+      recordedPcm = [];
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioChunks = [];
-        mediaRecorder = new MediaRecorder(stream);
-        mediaRecorder.ondataavailable = (ev) => {
-          if (ev.data.size > 0) audioChunks.push(ev.data);
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioCtx = new AudioContext({ sampleRate: 16000 });
+        const source = audioCtx.createMediaStreamSource(micStream);
+        scriptProcessor = audioCtx.createScriptProcessor(2048, 1, 1);
+        scriptProcessor.onaudioprocess = (e) => {
+          const input = e.inputBuffer.getChannelData(0);
+          recordedPcm.push(new Float32Array(input));
+
+          let sum = 0;
+          for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
+          const rms = Math.sqrt(sum / input.length);
+          if (waveBars) {
+            waveBars.forEach((bar, i) => {
+              const h = Math.round(3 + Math.min(1, rms * 5) * 13 * (0.6 + 0.4 * Math.sin(i * 1.3)));
+              bar.style.height = `${h}px`;
+            });
+          }
         };
-        mediaRecorder.start(100);
+        source.connect(scriptProcessor);
+        scriptProcessor.connect(audioCtx.destination);
       } catch (err) {
         console.warn('[renderer] Microphone access unavailable, continuing with protocol PTT:', err);
       }
@@ -509,19 +563,33 @@ async function bootstrap() {
     const stopPtt = () => {
       if (!btnPtt.classList.contains('is-recording')) return;
       btnPtt.classList.remove('is-recording');
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(audioChunks, { type: 'audio/webm' });
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64Audio = reader.result as string;
-            host.sendToBrain({ type: 'ptt_stop', audio: base64Audio });
-          };
-          reader.readAsDataURL(blob);
-        };
-        mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
-        mediaRecorder = null;
+
+      let base64Wav: string | null = null;
+      if (recordedPcm.length > 0) {
+        let totalLen = 0;
+        for (const c of recordedPcm) totalLen += c.length;
+        if (totalLen >= 1600) {
+          const merged = new Float32Array(totalLen);
+          let offset = 0;
+          for (const c of recordedPcm) {
+            merged.set(c, offset);
+            offset += c.length;
+          }
+          base64Wav = encodeWav(merged, 16000);
+        }
+      }
+
+      try {
+        scriptProcessor?.disconnect();
+        scriptProcessor = null;
+        micStream?.getTracks().forEach((track) => track.stop());
+        micStream = null;
+        audioCtx?.close();
+        audioCtx = null;
+      } catch (_) {}
+
+      if (base64Wav) {
+        host.sendToBrain({ type: 'ptt_stop', audio: base64Wav });
       } else {
         host.sendToBrain({ type: 'ptt_stop' });
       }
