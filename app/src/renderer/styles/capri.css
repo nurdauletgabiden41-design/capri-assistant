@@ -67,6 +67,14 @@
   --violet: #7b3dff;
   --blue: #3d6bff;
 
+  /* Cyberpunk 2077 Palette */
+  --cp-yellow: #fcee0a;
+  --cp-cyan: #00f0ff;
+  --cp-red: #ff003c;
+  --cp-dark: #090a0f;
+  --cp-carbon: #12141c;
+  --cp-amber: #ff9800;
+
   --font-display: 'Chakra Petch', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', Consolas, monospace;
 
@@ -138,16 +146,20 @@ html, body {
   animation: pulse-red 0.6s infinite alternate;
 }
 
-/* Transmission Panel */
+/* ==================================================================
+   VARIANT 2: Desktop Companion HUD (#panel)
+   Futuristic, Trigger/Cyberpunk beveled container
+   ================================================================== */
 #panel {
   position: absolute;
   z-index: 20;
-  width: 320px;
-  background: var(--ink);
+  width: 340px;
+  background: linear-gradient(135deg, rgba(20, 16, 28, 0.95), rgba(13, 10, 20, 0.98));
   color: var(--paper);
-  border: 1px solid var(--violet);
-  box-shadow: 6px 6px 0 var(--violet);
-  padding: 12px;
+  border: 1px solid rgba(0, 240, 255, 0.45);
+  box-shadow: 4px 4px 0 rgba(123, 61, 255, 0.65), 0 0 15px rgba(0, 240, 255, 0.15);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  padding: 12px 14px;
   font-family: var(--font-display);
   pointer-events: auto;
   transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out);
@@ -161,9 +173,29 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid rgba(123, 61, 255, 0.4);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.3);
   padding-bottom: 6px;
   margin-bottom: 8px;
+}
+
+.panel__status-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel__status-led {
+  width: 7px;
+  height: 7px;
+  background: var(--green);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse-green 1.5s infinite;
+}
+
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
 }
 
 .panel__badge {
@@ -173,12 +205,38 @@ html, body {
   font-size: 10px;
   font-weight: 700;
   padding: 2px 6px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
 }
 
 .panel__badge.badge-offline {
   background: var(--red);
   color: var(--paper);
+  box-shadow: 0 0 8px var(--red);
+}
+
+.panel__header-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel__btn-switch {
+  background: rgba(0, 240, 255, 0.12);
+  border: 1px solid var(--cp-cyan);
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.15s ease;
+}
+
+.panel__btn-switch:hover {
+  background: var(--cp-cyan);
+  color: var(--ink);
+  box-shadow: 0 0 8px var(--cp-cyan);
 }
 
 .panel__close {
@@ -187,7 +245,9 @@ html, body {
   color: var(--paper-2);
   cursor: pointer;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
 }
 .panel__close:hover {
   color: var(--red);
@@ -199,11 +259,13 @@ html, body {
 }
 
 .panel__face {
+  position: relative;
   width: 64px;
   height: 64px;
   flex-shrink: 0;
   background: var(--ink-2);
   border: 1px solid var(--violet);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.8);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -215,6 +277,31 @@ html, body {
   height: 100%;
   object-fit: cover;
   image-rendering: pixelated;
+  transition: opacity 0.15s;
+}
+
+.panel__face img.is-swapping {
+  opacity: 0.3;
+  filter: blur(2px) contrast(150%);
+}
+
+.panel__face-scan {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 2px;
+  background: rgba(0, 240, 255, 0.6);
+  box-shadow: 0 0 6px var(--cp-cyan);
+  animation: face-scan 2.5s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes face-scan {
+  0% { top: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
 }
 
 .panel__content {
@@ -223,10 +310,35 @@ html, body {
 }
 
 .panel__text {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.4;
   margin: 0;
   word-break: break-word;
+  min-height: 38px;
+}
+
+.panel__quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.panel__chip {
+  background: #181324;
+  border: 1px solid rgba(123, 61, 255, 0.45);
+  color: var(--paper-2);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.panel__chip:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(54, 255, 122, 0.12);
 }
 
 .panel__actions {
@@ -244,6 +356,7 @@ html, body {
   padding: 6px 12px;
   cursor: pointer;
   box-shadow: 2px 2px 0 var(--green);
+  transition: all 0.15s;
 }
 
 .btn:hover {
@@ -277,10 +390,12 @@ html, body {
   font-size: 12px;
   padding: 6px 8px;
   outline: none;
+  transition: border-color 0.15s;
 }
 
 .panel__input:focus {
-  border-color: var(--green);
+  border-color: var(--cp-cyan);
+  box-shadow: 0 0 6px rgba(0, 240, 255, 0.4);
 }
 
 .panel__send {
@@ -291,6 +406,7 @@ html, body {
   font-size: 11px;
   padding: 0 10px;
   cursor: pointer;
+  transition: background 0.15s;
 }
 .panel__send:hover {
   background: var(--green);
@@ -308,14 +424,14 @@ html, body {
   user-select: none;
 }
 .panel__mic:hover {
-  background: var(--cyan);
+  background: var(--cp-cyan);
   color: var(--ink);
 }
 .panel__mic.is-recording {
   background: var(--red);
-  border-color: var(--magenta);
+  border-color: var(--cp-yellow);
   color: #fff;
-  box-shadow: 0 0 10px rgba(255, 60, 100, 0.8);
+  box-shadow: 0 0 10px rgba(255, 33, 82, 0.8);
 }
 
 /* Audio wave animation bars */
@@ -334,6 +450,437 @@ html, body {
   max-height: 16px;
   transition: height 0.05s ease;
   box-shadow: 0 0 4px var(--green);
+}
+
+/* ==================================================================
+   VARIANT 3: CYBERPUNK 2077 HOLOCALL WINDOW (#holocall-container)
+   Authentic Night City Comms Interface (PixiJS WebGL + CRT Feed)
+   ================================================================== */
+.holocall {
+  position: absolute;
+  z-index: 25;
+  width: 440px;
+  background: rgba(9, 10, 15, 0.96);
+  color: #fff;
+  border: 1px solid rgba(0, 240, 255, 0.55);
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.22), 6px 6px 0 rgba(255, 0, 60, 0.55);
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%);
+  font-family: var(--font-display);
+  pointer-events: auto;
+  transition: opacity 0.2s var(--ease-out), transform 0.2s var(--ease-out);
+  user-select: none;
+}
+
+.holocall[hidden] {
+  display: none !important;
+}
+
+/* Draggable Header */
+.holocall__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(90deg, #10121b 0%, #1a1e2b 100%);
+  border-bottom: 1px solid rgba(0, 240, 255, 0.4);
+  padding: 8px 12px;
+  cursor: move;
+}
+
+.holocall__header-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.holocall__status-led {
+  width: 8px;
+  height: 8px;
+  background: var(--cp-yellow);
+  box-shadow: 0 0 10px var(--cp-yellow);
+  border-radius: 50%;
+  animation: pulse-yellow 1.2s infinite alternate;
+}
+
+@keyframes pulse-yellow {
+  0% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+.holocall__title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--cp-yellow);
+}
+
+.holocall__code {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--cp-cyan);
+  opacity: 0.8;
+}
+
+.holocall__header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.holocall__btn-mode {
+  background: rgba(252, 238, 10, 0.15);
+  border: 1px solid var(--cp-yellow);
+  color: var(--cp-yellow);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.15s ease;
+}
+
+.holocall__btn-mode:hover {
+  background: var(--cp-yellow);
+  color: #000;
+  box-shadow: 0 0 8px var(--cp-yellow);
+}
+
+.holocall__btn-close {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 2px 4px;
+}
+
+.holocall__btn-close:hover {
+  color: var(--cp-red);
+}
+
+/* Netrunner CLI Input */
+.holocall__terminal {
+  background: #06070a;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.25);
+  padding: 8px 10px;
+}
+
+.holocall__terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.holocall__prompt-user {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--green);
+  white-space: nowrap;
+}
+
+.holocall__form {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+}
+
+.holocall__input {
+  flex: 1;
+  background: #0d1017;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.holocall__input:focus {
+  border-color: var(--cp-yellow);
+  box-shadow: 0 0 8px rgba(252, 238, 10, 0.4);
+}
+
+.holocall__btn-mic {
+  background: #171b26;
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: #fff;
+  font-size: 12px;
+  padding: 0 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.holocall__btn-mic:hover {
+  background: var(--cp-cyan);
+  color: #000;
+}
+
+.holocall__btn-mic.is-recording {
+  background: var(--cp-red);
+  color: #fff;
+  border-color: var(--cp-yellow);
+  box-shadow: 0 0 10px var(--cp-red);
+}
+
+.holocall__btn-submit {
+  background: var(--cp-cyan);
+  border: none;
+  color: #000;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 10px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: background 0.15s;
+}
+
+.holocall__btn-submit:hover {
+  background: var(--cp-yellow);
+}
+
+.holocall__quick-chips {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  overflow-x: auto;
+}
+
+.holocall__chip {
+  background: #10141d;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 2px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.holocall__chip:hover {
+  border-color: var(--cp-cyan);
+  color: var(--cp-cyan);
+  background: rgba(0, 240, 255, 0.15);
+}
+
+/* Central Video Screen */
+.holocall__screen {
+  position: relative;
+  width: 440px;
+  height: 330px;
+  background: radial-gradient(circle at center, #0f1624 0%, #05070c 100%);
+  overflow: hidden;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.35);
+}
+
+.holocall__canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* CRT Horizontal Scanlines Overlay */
+.holocall__screen::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.22) 0px,
+    rgba(0, 0, 0, 0.22) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Vertical Travelling Hologram Beam */
+.holocall__scanline-beam {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 60px;
+  background: linear-gradient(180deg, rgba(0, 240, 255, 0) 0%, rgba(0, 240, 255, 0.15) 50%, rgba(0, 240, 255, 0) 100%);
+  pointer-events: none;
+  z-index: 3;
+  animation: holobeam 3.5s linear infinite;
+}
+
+@keyframes holobeam {
+  0% { transform: translateY(-60px); }
+  100% { transform: translateY(330px); }
+}
+
+/* Tactical Corner Brackets */
+.holocall__corners span {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--cp-cyan);
+  pointer-events: none;
+  z-index: 4;
+}
+.corner-tl { left: 8px; top: 8px; border-right: none !important; border-bottom: none !important; }
+.corner-tr { right: 8px; top: 8px; border-left: none !important; border-bottom: none !important; }
+.corner-bl { left: 8px; bottom: 8px; border-right: none !important; border-top: none !important; }
+.corner-br { right: 8px; bottom: 8px; border-left: none !important; border-top: none !important; }
+
+.holocall__feed-badge {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--cp-cyan);
+  background: rgba(0, 0, 0, 0.65);
+  padding: 1px 4px;
+  letter-spacing: 0.6px;
+  z-index: 4;
+  border-left: 2px solid var(--cp-cyan);
+}
+
+/* In-Feed Live Subtitles */
+.holocall__subtitles-container {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.85) 30%, rgba(0, 0, 0, 0.95) 100%);
+  padding: 12px 16px 10px;
+  z-index: 5;
+  border-top: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+.holocall__subtitles-speaker {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--cp-yellow);
+  letter-spacing: 0.8px;
+  margin-bottom: 2px;
+}
+
+.holocall__subtitles-text {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.35;
+  color: #fff;
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.6);
+  min-height: 34px;
+  word-break: break-word;
+}
+
+/* Expandable Neural Data Stream Drawer */
+.holocall__drawer {
+  background: #0a0c12;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+}
+
+.holocall__drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.02);
+  transition: background 0.15s;
+}
+
+.holocall__drawer-header:hover {
+  background: rgba(0, 240, 255, 0.08);
+}
+
+.holocall__drawer-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: var(--cp-yellow);
+}
+
+.holocall__btn-copy {
+  background: rgba(0, 240, 255, 0.2);
+  border: 1px solid var(--cp-cyan);
+  color: var(--cp-cyan);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.holocall__btn-copy:hover {
+  background: var(--cp-cyan);
+  color: #000;
+}
+
+.holocall__drawer-content {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 8px 12px;
+  background: #050608;
+  border-top: 1px solid rgba(0, 240, 255, 0.15);
+}
+
+.holocall__drawer-content pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--green);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Holocall Footer */
+.holocall__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: #080a10;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.holocall__footer-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.holocall__timer {
+  color: var(--cp-yellow);
+  font-weight: 700;
+}
+
+.holocall__encryption {
+  color: var(--cp-cyan);
+}
+
+.holocall__audio-meter {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 12px;
+}
+
+.holocall__audio-bar {
+  width: 3px;
+  height: 4px;
+  background: var(--cp-cyan);
+  box-shadow: 0 0 4px var(--cp-cyan);
+  transition: height 0.05s;
 }
 
 /* Settings Modal */

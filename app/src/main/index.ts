@@ -75,6 +75,12 @@ if (!gotTheLock) {
     // 6. Global Shortcuts
     try {
       globalShortcut.register('Control+Alt+C', () => toggleVisible());
+      globalShortcut.register('Control+Alt+H', () => {
+        logger.info('[main] Toggle Holocall hotkey triggered');
+        if (!win.isDestroyed()) {
+          win.webContents.send('capri:command', { name: 'toggle-holocall' });
+        }
+      });
 
       let isPttActive = false;
       globalShortcut.register('Control+Shift+Space', () => {
@@ -110,6 +116,8 @@ if (!gotTheLock) {
       setTimeout(() => {
         if (captureArg && captureArg.includes('settings')) {
           overlay?.window?.webContents.send('capri:command', { name: 'open-settings' });
+        } else if (captureArg && captureArg.includes('holocall')) {
+          overlay?.window?.webContents.send('capri:command', { name: 'toggle-holocall' });
         } else {
           triggerDemo();
         }
@@ -135,7 +143,7 @@ if (!gotTheLock) {
         } catch (err) {
           logger.error('[main] Screenshot capture failed:', err);
         } finally {
-          app.quit();
+          app.exit(0);
         }
       }, 5000);
     }

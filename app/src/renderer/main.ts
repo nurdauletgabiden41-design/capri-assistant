@@ -5,6 +5,7 @@ import { CapriController, WindowData } from './character/CapriController';
 import { Chip } from './character/Chip';
 import { getDemoSteps } from './demo/demoSequence';
 import { FxLayer } from './fx/FxLayer';
+import { HolocallFeed } from './holocall/HolocallFeed';
 
 declare global {
   interface Window {
@@ -115,6 +116,25 @@ async function bootstrap() {
   const btnPtt = document.getElementById('btn-ptt') as HTMLButtonElement | null;
   const panelWave = document.getElementById('panel-wave') as HTMLDivElement | null;
   const waveBars = panelWave?.querySelectorAll('.panel__wave-bar') as NodeListOf<HTMLDivElement> | null;
+  const btnSwitchHolocall = document.getElementById('btn-switch-holocall') as HTMLButtonElement | null;
+
+  // Holocall Mode Elements (Variant 3)
+  const holocallContainer = document.getElementById('holocall-container') as HTMLDivElement;
+  const holocallHeader = document.getElementById('holocall-header') as HTMLDivElement;
+  const holocallBtnMode = document.getElementById('holocall-btn-mode') as HTMLButtonElement;
+  const holocallBtnClose = document.getElementById('holocall-btn-close') as HTMLButtonElement;
+  const holocallForm = document.getElementById('holocall-form') as HTMLFormElement;
+  const holocallInput = document.getElementById('holocall-input') as HTMLInputElement;
+  const holocallMic = document.getElementById('holocall-mic') as HTMLButtonElement | null;
+  const holocallCanvas = document.getElementById('holocall-canvas') as HTMLCanvasElement;
+  const holocallSubtitles = document.getElementById('holocall-subtitles') as HTMLDivElement;
+  const holocallDrawerToggle = document.getElementById('holocall-drawer-toggle') as HTMLDivElement;
+  const holocallDrawerTitle = document.getElementById('holocall-drawer-title') as HTMLSpanElement;
+  const holocallDrawerContent = document.getElementById('holocall-drawer-content') as HTMLDivElement;
+  const holocallCodeText = document.getElementById('holocall-code-text') as HTMLElement;
+  const holocallBtnCopy = document.getElementById('holocall-btn-copy') as HTMLButtonElement;
+  const holocallTimer = document.getElementById('holocall-timer') as HTMLSpanElement;
+  const holocallAudioBars = document.querySelectorAll<HTMLSpanElement>('.holocall__audio-bar');
 
   const settingsModal = document.getElementById('settings-modal') as HTMLDivElement;
   const settingsClose = document.getElementById('settings-close') as HTMLButtonElement;
@@ -161,12 +181,95 @@ async function bootstrap() {
     fx.loadCutin(name, `../assets/capri/cutin-${name}.png`);
   }
 
-  // 3. Load character sprite texture (or graceful fallback)
-  const spriteImg = await loadImage('../assets/capri/capri-full.png');
-  const textureSource: TexImageSource = spriteImg || makeFallbackTexture();
+  // 3. Load character sprite textures (HD standing and HD sitting with graceful fallbacks)
+  const [standImg, sitImg] = await Promise.all([
+    loadImage('../assets/capri/capri-stand-hd.png').then((img) => img || loadImage('../assets/capri/capri-full.png')),
+    loadImage('../assets/capri/capri-sitting-hd.png'),
+  ]);
+
+  const standTextureSource: TexImageSource = standImg || makeFallbackTexture();
+  const sitTextureSource: TexImageSource | undefined = sitImg || undefined;
 
   // 4. Initialize WebGL Capri Controller
-  const capri = new CapriController(capriEl, canvasEl, textureSource, fx, voice);
+  const capri = new CapriController(capriEl, canvasEl, standTextureSource, sitTextureSource, fx, voice);
+
+  // 4b. Initialize PixiJS Holographic Video Feed for Cyberpunk Holocall Mode
+  const holocallFeed = new HolocallFeed(holocallCanvas);
+  await holocallFeed.init();
+
+  // Mode Management: Variant 2 (Desktop Companion) vs Variant 3 (Cyberpunk Holocall)
+  type AppMode = 'companion' | 'holocall';
+  let currentMode: AppMode = 'companion';
+  let holocallTimerInterval: any = null;
+  let holocallSeconds = 0;
+  let holocallSubTimer: any = null;
+
+  holocallContainer.style.left = `${Math.max(20, window.innerWidth - 480)}px`;
+  holocallContainer.style.top = `${Math.max(40, Math.round((window.innerHeight - 620) / 2))}px`;
+
+  function updateHolocallTimer() {
+    holocallSeconds++;
+    const h = String(Math.floor(holocallSeconds / 3600)).padStart(2, '0');
+    const m = String(Math.floor((holocallSeconds % 3600) / 60)).padStart(2, '0');
+    const s = String(holocallSeconds % 60).padStart(2, '0');
+    holocallTimer.textContent = `${h}:${m}:${s}`;
+  }
+
+  function setMode(mode: AppMode) {
+    currentMode = mode;
+    if (mode === 'holocall') {
+      panelEl.hidden = true;
+      holocallContainer.hidden = false;
+      holocallFeed.setEmotion('calm');
+      holocallFeed.triggerGlitch(0.8, 300);
+      voice.play('hello');
+      clearInterval(holocallTimerInterval);
+      holocallSeconds = 0;
+      updateHolocallTimer();
+      holocallTimerInterval = setInterval(updateHolocallTimer, 1000);
+      holocallInput.focus();
+    } else {
+      holocallContainer.hidden = true;
+      clearInterval(holocallTimerInterval);
+      panelEl.hidden = false;
+      voice.play('rise');
+      capri.playAct('hop');
+      updatePanelPosition();
+    }
+    setInteractive(true);
+  }
+
+  function streamSubtitles(text: string) {
+    clearInterval(holocallSubTimer);
+    const chars = [...text];
+    let done = 0;
+    const step = () => {
+      done = Math.min(chars.length, done + 3);
+      holocallSubtitles.textContent = chars.slice(0, done).join('');
+      if (done >= chars.length) {
+        clearInterval(holocallSubTimer);
+      }
+    };
+    step();
+    holocallSubTimer = setInterval(step, 20);
+  }
+
+  function appendToHolocallStream(line: string) {
+    if (holocallCodeText.textContent === '// Данные операций и код будут отображаться здесь') {
+      holocallCodeText.textContent = line;
+    } else {
+      holocallCodeText.textContent += '\n' + line;
+    }
+    holocallBtnCopy.hidden = false;
+    holocallDrawerContent.scrollTop = holocallDrawerContent.scrollHeight;
+  }
+
+  function updateHolocallAudioBars(level: number) {
+    holocallAudioBars.forEach((bar, i) => {
+      const h = Math.round(3 + level * 10 * (0.6 + 0.4 * Math.sin(i * 1.5)));
+      bar.style.height = `${h}px`;
+    });
+  }
 
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const isReducedMotion = cfg.motion === 'reduced' || (cfg.motion === 'auto' && prefersReduced);
@@ -255,9 +358,22 @@ async function bootstrap() {
   // Interactive Click-Through Logic
   let isInteractive = false;
   let mousePos: { x: number; y: number } | null = null;
+  let isDraggingHolocall = false;
+  let holocallDragOffset = { x: 0, y: 0 };
+
+  holocallHeader.addEventListener('mousedown', (e) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    isDraggingHolocall = true;
+    const r = holocallContainer.getBoundingClientRect();
+    holocallDragOffset = {
+      x: e.clientX - r.left,
+      y: e.clientY - r.top,
+    };
+    setInteractive(true);
+  });
 
   function refreshHitTest(x: number, y: number) {
-    if (capri.isDragging) {
+    if (capri.isDragging || isDraggingHolocall) {
       setInteractive(true);
       return;
     }
@@ -266,6 +382,12 @@ async function bootstrap() {
     if (!panelEl.hidden) {
       const r = panelEl.getBoundingClientRect();
       onPanel = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }
+
+    let onHolocall = false;
+    if (!holocallContainer.hidden) {
+      const r = holocallContainer.getBoundingClientRect();
+      onHolocall = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
     }
 
     let onMenu = false;
@@ -283,12 +405,12 @@ async function bootstrap() {
     const onChip = chip.contains(x, y);
     const onCapri = capri.hitTest(x, y);
 
-    const hit = onPanel || onMenu || onChip || onCapri || onSettings;
+    const hit = onPanel || onHolocall || onMenu || onChip || onCapri || onSettings;
     setInteractive(hit);
 
     // Adaptive polling: 30 Hz when near, 5 Hz when far
     const dist = Math.hypot(x - capri.pos.x, y - (capri.pos.y - 200));
-    host.setNearTarget(dist < 260 || onPanel || onMenu || onChip || onSettings);
+    host.setNearTarget(dist < 260 || onPanel || onHolocall || onMenu || onChip || onSettings);
   }
 
   function setInteractive(on: boolean) {
@@ -322,6 +444,14 @@ async function bootstrap() {
 
   window.addEventListener('mousemove', (e) => {
     mousePos = { x: e.clientX, y: e.clientY };
+
+    if (isDraggingHolocall) {
+      const newX = Math.max(10, Math.min(window.innerWidth - 450, e.clientX - holocallDragOffset.x));
+      const newY = Math.max(10, Math.min(window.innerHeight - 350, e.clientY - holocallDragOffset.y));
+      holocallContainer.style.left = `${newX}px`;
+      holocallContainer.style.top = `${newY}px`;
+      return;
+    }
 
     if (mouseDownPos && !capri.isDragging) {
       const dist = Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y);
@@ -399,6 +529,10 @@ async function bootstrap() {
 
   window.addEventListener('mouseup', (e) => {
     if (e.button === 0) {
+      if (isDraggingHolocall) {
+        isDraggingHolocall = false;
+        if (mousePos) refreshHitTest(mousePos.x, mousePos.y);
+      }
       if (capri.isDragging) {
         capri.isDragging = false;
         capri.drop();
@@ -471,6 +605,8 @@ async function bootstrap() {
       voice.play('hello');
       panelEl.hidden = false;
       chatInput.focus();
+    } else if (action === 'holocall') {
+      setMode('holocall');
     } else if (action === 'settings') {
       openSettings();
     } else if (action === 'quit') {
@@ -578,6 +714,75 @@ async function bootstrap() {
     }
   });
 
+  holocallInput.addEventListener('focus', () => host.setFocus(true));
+  holocallInput.addEventListener('blur', () => host.setFocus(false));
+  holocallInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      holocallInput.blur();
+      setMode('companion');
+      host.setFocus(false);
+    }
+  });
+
+  // Mode Switchers
+  btnSwitchHolocall?.addEventListener('click', () => setMode('holocall'));
+  holocallBtnMode?.addEventListener('click', () => setMode('companion'));
+  holocallBtnClose?.addEventListener('click', () => setMode('companion'));
+
+  // Quick Suggestion Chips (Desktop Companion HUD)
+  document.querySelectorAll<HTMLButtonElement>('.panel__chip').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cmd = btn.getAttribute('data-cmd') || btn.textContent || '';
+      chatInput.value = cmd;
+      chatForm.dispatchEvent(new Event('submit'));
+    });
+  });
+
+  // Quick Netrunner Commands (Holocall Window)
+  document.querySelectorAll<HTMLButtonElement>('.holocall__chip').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cmd = btn.getAttribute('data-cmd') || btn.textContent || '';
+      holocallInput.value = cmd;
+      holocallForm.dispatchEvent(new Event('submit'));
+    });
+  });
+
+  // Holocall CLI Form
+  holocallForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = holocallInput.value.trim();
+    if (!text) return;
+    holocallInput.value = '';
+
+    streamSubtitles('Обрабатываю запрос...');
+    holocallFeed.setEmotion('calm');
+    voice.play('tick');
+    host.sendToBrain({ type: 'user_text', text });
+  });
+
+  // Holocall Code Drawer Toggle & Copy Button
+  holocallDrawerToggle.addEventListener('click', () => {
+    const isHidden = holocallDrawerContent.hidden;
+    holocallDrawerContent.hidden = !isHidden;
+    holocallDrawerTitle.textContent = isHidden
+      ? '⯆ NEURAL DATA STREAM // CODE & LOGS'
+      : '⯈ NEURAL DATA STREAM // CODE & LOGS';
+    voice.play('tick');
+  });
+
+  holocallBtnCopy.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const code = holocallCodeText.textContent || '';
+    if (code) {
+      await navigator.clipboard.writeText(code);
+      holocallBtnCopy.textContent = 'COPIED!';
+      voice.play('star', { soft: true });
+      setTimeout(() => {
+        holocallBtnCopy.textContent = 'COPY CODE';
+      }, 1500);
+    }
+  });
+
   panelClose.addEventListener('click', () => {
     panelEl.hidden = true;
     host.setFocus(false);
@@ -639,9 +844,10 @@ async function bootstrap() {
   let scriptProcessor: ScriptProcessorNode | null = null;
   let recordedPcm: Float32Array[] = [];
 
-  if (btnPtt) {
+  if (btnPtt || holocallMic) {
     const startPtt = async () => {
-      btnPtt.classList.add('is-recording');
+      btnPtt?.classList.add('is-recording');
+      holocallMic?.classList.add('is-recording');
       host.sendToBrain({ type: 'ptt_start' });
       recordedPcm = [];
       try {
@@ -662,6 +868,7 @@ async function bootstrap() {
               bar.style.height = `${h}px`;
             });
           }
+          updateHolocallAudioBars(rms * 4);
         };
         source.connect(scriptProcessor);
         scriptProcessor.connect(audioCtx.destination);
@@ -671,8 +878,9 @@ async function bootstrap() {
     };
 
     const stopPtt = () => {
-      if (!btnPtt.classList.contains('is-recording')) return;
-      btnPtt.classList.remove('is-recording');
+      if (!btnPtt?.classList.contains('is-recording') && !holocallMic?.classList.contains('is-recording')) return;
+      btnPtt?.classList.remove('is-recording');
+      holocallMic?.classList.remove('is-recording');
 
       let base64Wav: string | null = null;
       if (recordedPcm.length > 0) {
@@ -705,16 +913,26 @@ async function bootstrap() {
       }
     };
 
-    btnPtt.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      startPtt();
-    });
+    if (btnPtt) {
+      btnPtt.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startPtt();
+      });
+    }
+    if (holocallMic) {
+      holocallMic.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startPtt();
+      });
+    }
     window.addEventListener('mouseup', () => stopPtt());
   }
 
   // Host Commands (e.g. from tray or hotkey)
   host.onCommand((cmd) => {
-    if (cmd.name === 'stow') {
+    if (cmd.name === 'toggle-holocall') {
+      setMode(currentMode === 'companion' ? 'holocall' : 'companion');
+    } else if (cmd.name === 'stow') {
       if (cmd.on) {
         voice.play('teleport-out');
         capri.stow();
@@ -757,7 +975,10 @@ async function bootstrap() {
       panelBadge.className = 'panel__badge';
       panelEl.hidden = false;
       voice.play('hello');
-      decodeText(`Капри онлайн! Модель: ${msg.active_model || 'Haiku'}`, () => voice.play('blip'));
+      const startText = `Капри онлайн! Модель: ${msg.active_model || 'Haiku'}`;
+      decodeText(startText, () => voice.play('blip'));
+      streamSubtitles(startText);
+      holocallFeed.setEmotion('calm');
       setFace('smug');
       capri.playAct('hop');
       updatePanelPosition();
@@ -768,6 +989,8 @@ async function bootstrap() {
       panelBadge.className = 'panel__badge badge-offline';
       voice.play('error');
       decodeText('Конструкт отключен от нейросети.', () => voice.play('blip'));
+      streamSubtitles('Конструкт отключен от нейросети.');
+      holocallFeed.triggerGlitch(0.8, 400);
       setFace('laugh');
     } else if (type === 'thinking_start') {
       tickerEl.hidden = false;
@@ -783,24 +1006,42 @@ async function bootstrap() {
       if (sec >= 15) {
         tickerEl.className = 'is-thinking is-deep-thinking';
         capri.misreg([4, -2], 300);
+        holocallFeed.triggerGlitch(0.4, 250);
       }
     } else if (type === 'thinking_end') {
       tickerEl.hidden = true;
     } else if (type === 'error') {
       voice.play('error');
       capri.glitch(0.6, 350);
+      holocallFeed.triggerGlitch(0.9, 450);
       fx.burst(capri.pos.x, capri.pos.y - 100, { count: 18, power: 0.8 });
       capri.playAct('flinch', capri.facing);
       setFace('aside');
       panelEl.hidden = false;
       panelBadge.textContent = 'ERROR';
       panelBadge.className = 'panel__badge badge-offline';
-      decodeText(msg.message || 'Произошла непредвиденная ошибка.', () => voice.play('blip'));
+      const errText = msg.message || 'Произошла непредвиденная ошибка.';
+      decodeText(errText, () => voice.play('blip'));
+      streamSubtitles(`ОШИБКА: ${errText}`);
+      appendToHolocallStream(`[ERR] ${errText}`);
       updatePanelPosition();
     } else if (type === 'assistant_message') {
       panelEl.hidden = false;
-      decodeText(msg.text || '', () => voice.play('blip'));
-      if (msg.face) setFace(msg.face);
+      const text = msg.text || '';
+      decodeText(text, () => voice.play('blip'));
+      streamSubtitles(text);
+
+      if (msg.face) {
+        setFace(msg.face);
+        if (msg.face === 'laugh') {
+          holocallFeed.setEmotion('laugh');
+        } else if (msg.face === 'smug' || msg.face === 'wide') {
+          holocallFeed.setEmotion('wink');
+        } else {
+          holocallFeed.setEmotion('calm');
+        }
+      }
+
       if (msg.badge) panelBadge.textContent = msg.badge;
       capri.playAct('talk');
       updatePanelPosition();
@@ -811,11 +1052,14 @@ async function bootstrap() {
 
       tickerEl.hidden = false;
       tickerEl.className = '';
-      tickerVerb.textContent = msg.ticker || `${msg.tool.toUpperCase()}`;
+      const tVerb = msg.ticker || `${msg.tool?.toUpperCase()}`;
+      tickerVerb.textContent = tVerb;
       tickerTarget.textContent = msg.target || '';
+      appendToHolocallStream(`> EXEC [${tVerb}] ${msg.target || ''}`);
       updatePanelPosition();
     } else if (type === 'tool_end') {
       voice.play('tick');
+      appendToHolocallStream(`< DONE [${msg.tool || 'ACTION'}]`);
       setTimeout(() => {
         if (!tickerEl.classList.contains('is-thinking')) {
           tickerEl.hidden = true;
@@ -828,11 +1072,14 @@ async function bootstrap() {
       capri.playAct('alarm', capri.facing);
       fx.showCutin('many', 900);
       voice.play('alert');
+      holocallFeed.triggerGlitch(0.8, 400);
 
       panelEl.hidden = false;
       panelBadge.textContent = 'APPROVAL';
       panelBadge.className = 'panel__badge badge-offline';
       decodeText(`${msg.summary}\n${msg.details}`, () => voice.play('blip'));
+      streamSubtitles(`ТРЕБУЕТСЯ ПОДТВЕРЖДЕНИЕ: ${msg.summary || ''}`);
+      appendToHolocallStream(`! APPROVAL REQUIRED: ${msg.summary || ''}\n${msg.details || ''}`);
       setFace('many');
 
       panelActions.hidden = false;
@@ -854,18 +1101,21 @@ async function bootstrap() {
     } else if (type === 'approval_resolved') {
       panelActions.hidden = true;
       voice.play(msg.approved ? 'hello' : 'alert');
-      decodeText(
-        msg.approved ? 'Действие подтверждено!' : 'Действие отклонено пользователем.',
-        () => voice.play('blip')
-      );
+      const resText = msg.approved ? 'Действие подтверждено!' : 'Действие отклонено пользователем.';
+      decodeText(resText, () => voice.play('blip'));
+      streamSubtitles(resText);
+      appendToHolocallStream(msg.approved ? `[CONFIRMED] Действие разрешено` : `[DENIED] Действие отклонено`);
       setFace(msg.approved ? 'smug' : 'aside');
       capri.playAct(msg.approved ? 'hop' : 'flinch');
+      holocallFeed.setEmotion(msg.approved ? 'wink' : 'calm');
     } else if (type === 'task_done') {
       // Trigger-style Victory Sequence: hop, cut-in, shards, star audio, mission report
       capri.playAct('victory', capri.facing);
       fx.showCutin('grin', 1200);
       fx.burst(capri.pos.x, capri.pos.y - 120, { count: 36, power: 1.4 });
       voice.play('done');
+      holocallFeed.setEmotion('laugh');
+      holocallFeed.triggerGlitch(0.6, 300);
 
       panelEl.hidden = false;
       panelBadge.textContent = 'VICTORY';
@@ -875,15 +1125,19 @@ async function bootstrap() {
       const durationSec = ((msg.duration_ms || 1000) / 1000).toFixed(1);
       const report = `★ ЗАДАЧА ВЫПОЛНЕНА ★\n⚡ Действий: ${actionsCount} | 📁 Файлов: ${filesCount} | ⏱ ${durationSec}с\n\n${msg.last_sentence || 'Все операции завершены успешно.'}`;
       decodeText(report, () => voice.play('star', { soft: true }));
+      streamSubtitles(`★ ЗАДАЧА ВЫПОЛНЕНА: ${msg.last_sentence || 'Все операции завершены.'}`);
+      appendToHolocallStream(`★ MISSION REPORT ★\nActions: ${actionsCount} | Files: ${filesCount} | Time: ${durationSec}s\n${msg.last_sentence || 'OK'}`);
       setFace('laugh');
       updatePanelPosition();
     } else if (type === 'listening_start') {
       btnPtt?.classList.add('is-recording');
+      holocallMic?.classList.add('is-recording');
       panelEl.hidden = false;
       panelBadge.textContent = 'LISTENING';
       panelBadge.className = 'panel__badge';
       if (panelWave) panelWave.hidden = false;
       decodeText('Слушаю тебя...', () => voice.play('blip'));
+      streamSubtitles('Слушаю голосовой поток... Говори.');
       setFace('look');
       capri.playAct('curious', capri.facing);
       updatePanelPosition();
@@ -895,15 +1149,21 @@ async function bootstrap() {
           bar.style.height = `${h}px`;
         });
       }
+      updateHolocallAudioBars(lvl);
     } else if (type === 'listening_end') {
       btnPtt?.classList.remove('is-recording');
+      holocallMic?.classList.remove('is-recording');
       panelBadge.textContent = 'STT...';
       decodeText('Распознаю голос...', () => voice.play('blip'));
+      streamSubtitles('Обработка аудиопотока STT...');
     } else if (type === 'transcript') {
       panelBadge.textContent = 'USER';
       if (panelWave) panelWave.hidden = true;
       decodeText(msg.text, () => voice.play('blip'));
+      streamSubtitles(`USER: "${msg.text}"`);
+      appendToHolocallStream(`USER > ${msg.text}`);
     } else if (type === 'tts_start') {
+      holocallFeed.setSpeaking(true);
       if (panelWave) panelWave.hidden = false;
       if (currentAudio) {
         currentAudio.pause();
@@ -914,6 +1174,8 @@ async function bootstrap() {
         currentAudio.play().catch((err) => console.warn('[renderer] Audio playback failed:', err));
         currentAudio.onended = () => {
           currentAudio = null;
+          holocallFeed.setSpeaking(false);
+          updateHolocallAudioBars(0);
           if (panelWave) panelWave.hidden = true;
         };
       }
@@ -922,6 +1184,8 @@ async function bootstrap() {
       if (lvl > 0.15) {
         capri.playAct('talk');
       }
+      holocallFeed.setVoiceLevel(lvl);
+      updateHolocallAudioBars(lvl);
       if (waveBars) {
         waveBars.forEach((bar, i) => {
           const h = Math.round(3 + lvl * 13 * (0.5 + 0.5 * Math.cos(i * 1.5)));
@@ -929,6 +1193,8 @@ async function bootstrap() {
         });
       }
     } else if (type === 'tts_end') {
+      holocallFeed.setSpeaking(false);
+      updateHolocallAudioBars(0);
       if (currentAudio) {
         currentAudio.pause();
         currentAudio = null;

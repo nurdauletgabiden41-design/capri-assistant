@@ -117,6 +117,7 @@ export class CapriController {
     root: HTMLElement,
     canvas: HTMLCanvasElement,
     image: TexImageSource,
+    sitImage?: TexImageSource,
     fx?: FxLayer,
     voice?: VoiceSynth
   ) {
@@ -124,7 +125,7 @@ export class CapriController {
     this.canvas = canvas;
     this.fx = fx;
     this.voice = voice;
-    this.renderer = new SpriteRenderer(canvas, image);
+    this.renderer = new SpriteRenderer(canvas, image, sitImage);
     this.basePlayer = new Player('stand');
     this.buildAlphaMap(image);
     this.setScale(this.scale);

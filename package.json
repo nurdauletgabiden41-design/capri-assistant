@@ -62,6 +62,7 @@
   "dependencies": {
     "@fontsource/chakra-petch": "^5.1.0",
     "@fontsource/jetbrains-mono": "^5.1.0",
+    "pixi.js": "^8.22.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

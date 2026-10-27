@@ -18,6 +18,8 @@ reference/
 
 # Non-MIT media assets (frames & cut-outs from Cyberpunk: Edgerunners, for personal local use only)
 app/assets/capri/
+art_raw/
+art_cutouts/
 
 # Logs and runtime artifacts
 *.log

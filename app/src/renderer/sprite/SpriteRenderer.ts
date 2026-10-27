@@ -23,6 +23,8 @@ precision highp float;
 varying vec2 vPx;
 
 uniform sampler2D uTex;
+uniform sampler2D uSitTex;
+uniform float uHasSitTex;
 uniform vec2 uSize;
 uniform float uSeed;
 uniform float uBoil;
@@ -133,6 +135,23 @@ vec4 cel(vec2 s) {
   return vec4(c.rgb * c.a, c.a);
 }
 
+// Authentic HD sitting sprite sample (crossed legs naturally resting on ledge)
+vec4 celSit(vec2 s) {
+  vec2 sitUv = vec2((s.x - (AXIS - 115.5)) / 231.0, s.y / 232.0);
+  if (sitUv.x < 0.0 || sitUv.y < 0.0 || sitUv.x > 1.0 || sitUv.y > 1.0) return vec4(0.0);
+  vec4 c = texture2D(uSitTex, sitUv);
+  if (c.a <= 0.0) return vec4(0.0);
+  float red;
+  c.rgb = grade(c.rgb, red);
+  if (red > 0.0 && uSparkle > 0.0) {
+    vec2 cell = floor(s / max(0.8, uPx * 1.2));
+    float star = step(0.976, hash(cell + 3.1)) * 0.85;
+    float tw = step(0.993, hash(cell + uSeed * 1.37));
+    c.rgb = mix(c.rgb, vec3(1.0, 0.95, 0.97), clamp((star + tw) * red * uSparkle, 0.0, 1.0));
+  }
+  return vec4(c.rgb * c.a, c.a);
+}
+
 // Lower legs, in source pixels; the line between them leans with the stance.
 float legSep(float y) { return 117.0 + max(0.0, y - 300.0) * 0.15; }
 float legL(vec2 s) { return step(KNEE - 6.0, s.y) * (1.0 - step(legSep(s.y), s.x)); }
@@ -207,6 +226,9 @@ vec2 bend(vec2 q) {
 }
 
 vec4 rig(vec2 q) {
+  if (uSit > 0.5 && uHasSitTex > 0.5) {
+    return celSit(bend(q));
+  }
   vec2 qL = armLeft(q);
   vec2 qR = armRight(q);
   vec4 l = armL(qL) > 0.0 ? cel(qL) : vec4(0.0);
@@ -292,7 +314,7 @@ void main() {
 }`;
 
 const UNIFORMS = [
-  'uView', 'uPad', 'uTex', 'uSize', 'uSeed', 'uBoil', 'uHair', 'uHead', 'uMane', 'uArmL', 'uArmR', 'uLongL', 'uLongR',
+  'uView', 'uPad', 'uTex', 'uSitTex', 'uHasSitTex', 'uSize', 'uSeed', 'uBoil', 'uHair', 'uHead', 'uMane', 'uArmL', 'uArmR', 'uLongL', 'uLongR',
   'uSit', 'uKickL', 'uKickR',
   'uSmear', 'uEcho', 'uGlitch', 'uGlitchSeed',
   'uSplit', 'uCollapse', 'uDissolve', 'uSparkle', 'uGrade', 'uSil', 'uMisreg', 'uRim', 'uAlpha', 'uPx',
@@ -347,13 +369,17 @@ export const SPRITE = {
 export class SpriteRenderer {
   public canvas: HTMLCanvasElement;
   public image: TexImageSource;
+  public sitImage?: TexImageSource;
   public scale: number | null = null;
   private gl!: WebGLRenderingContext;
   private u: Record<string, WebGLUniformLocation | null> = {};
+  private tex: WebGLTexture | null = null;
+  private sitTex: WebGLTexture | null = null;
 
-  constructor(canvas: HTMLCanvasElement, image: TexImageSource) {
+  constructor(canvas: HTMLCanvasElement, image: TexImageSource, sitImage?: TexImageSource) {
     this.canvas = canvas;
     this.image = image;
+    this.sitImage = sitImage;
     this.setup();
 
     canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
@@ -402,6 +428,7 @@ export class SpriteRenderer {
       this.u[name] = gl.getUniformLocation(prog, name);
     }
 
+    // Standing / standard HD texture
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
@@ -410,8 +437,24 @@ export class SpriteRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.tex = tex;
+
+    // Authentic sitting HD texture
+    if (this.sitImage) {
+      const sitTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, sitTex);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.sitImage);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.sitTex = sitTex;
+    }
 
     gl.uniform1i(this.u.uTex, 0);
+    gl.uniform1i(this.u.uSitTex, 1);
+    gl.uniform1f(this.u.uHasSitTex, this.sitTex ? 1.0 : 0.0);
     gl.uniform2f(this.u.uSize, SPRITE.width, SPRITE.height);
     gl.uniform1f(this.u.uPad, SPRITE.pad);
     gl.uniform2f(this.u.uView, SPRITE.width + SPRITE.pad * 2, SPRITE.height + SPRITE.pad * 2);
@@ -427,7 +470,7 @@ export class SpriteRenderer {
 
   public resize(scale: number): void {
     this.scale = scale;
-    const dpr = window.devicePixelRatio || 1;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
     const { width, height } = SpriteRenderer.cssSize(scale);
     this.canvas.style.width = `${width}px`;
     this.canvas.style.height = `${height}px`;
@@ -440,6 +483,22 @@ export class SpriteRenderer {
   public draw(s: SpriteState): void {
     const { gl, u } = this;
     gl.clear(gl.COLOR_BUFFER_BIT);
+
+    if (this.tex) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.tex);
+      gl.uniform1i(u.uTex, 0);
+    }
+
+    if (this.sitTex) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.sitTex);
+      gl.uniform1i(u.uSitTex, 1);
+      gl.uniform1f(u.uHasSitTex, 1.0);
+    } else {
+      gl.uniform1f(u.uHasSitTex, 0.0);
+    }
+
     gl.uniform1f(u.uSeed, s.seed);
     gl.uniform1f(u.uBoil, s.boil);
     gl.uniform1f(u.uHair, s.hair);
