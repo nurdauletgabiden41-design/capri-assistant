@@ -149,6 +149,24 @@ async def handle_user_text(client: BrainWsClient, text: str) -> None:
     actions_count = 0
     files_changed = 0
 
+    ticker_stop_event = asyncio.Event()
+
+    async def _emit_ticks() -> None:
+        sec = 0
+        while not ticker_stop_event.is_set():
+            try:
+                await asyncio.sleep(1.0)
+                if ticker_stop_event.is_set():
+                    break
+                sec += 1
+                await client.send({"type": "thinking_tick", "elapsed_sec": sec})
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                pass
+
+    ticker_task = asyncio.create_task(_emit_ticks())
+
     try:
         openai_tools = tool_registry.get_openai_tools()
         async for chunk in llm_client.stream_chat(llm_messages, tools=openai_tools, max_tokens=1024):
@@ -166,6 +184,8 @@ async def handle_user_text(client: BrainWsClient, text: str) -> None:
             if chunk.model_used:
                 model_used = chunk.model_used
 
+        ticker_stop_event.set()
+        ticker_task.cancel()
         await client.send({"type": "thinking_end"})
 
         # If tools were invoked by LLM, execute them and perform follow-up turn
@@ -291,8 +311,17 @@ async def handle_user_text(client: BrainWsClient, text: str) -> None:
         )
 
     except Exception as err:
+        ticker_stop_event.set()
+        ticker_task.cancel()
         logger.error("LLM generation failed: %s", err)
         await client.send({"type": "thinking_end"})
+        await client.send(
+            {
+                "type": "error",
+                "message": f"Сбой нейросети: {err}. Проверь соединение или статус OpenRouter.",
+                "code": "LLM_ERROR",
+            }
+        )
         await client.send(
             {
                 "type": "assistant_message",

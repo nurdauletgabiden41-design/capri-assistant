@@ -666,9 +666,25 @@ async function bootstrap() {
       capri.playAct('curious', capri.facing);
       updatePanelPosition();
     } else if (type === 'thinking_tick') {
-      tickerVerb.textContent = `THINKING... ${msg.elapsed_sec}s`;
+      const sec = msg.elapsed_sec || 0;
+      tickerVerb.textContent = `THINKING... ${sec}s`;
+      if (sec >= 15) {
+        tickerEl.className = 'is-thinking is-deep-thinking';
+        capri.misreg([4, -2], 300);
+      }
     } else if (type === 'thinking_end') {
       tickerEl.hidden = true;
+    } else if (type === 'error') {
+      voice.play('error');
+      capri.glitch(0.6, 350);
+      fx.burst(capri.pos.x, capri.pos.y - 100, { count: 18, power: 0.8 });
+      capri.playAct('flinch', capri.facing);
+      setFace('aside');
+      panelEl.hidden = false;
+      panelBadge.textContent = 'ERROR';
+      panelBadge.className = 'panel__badge badge-offline';
+      decodeText(msg.message || 'Произошла непредвиденная ошибка.', () => voice.play('blip'));
+      updatePanelPosition();
     } else if (type === 'assistant_message') {
       panelEl.hidden = false;
       decodeText(msg.text || '', () => voice.play('blip'));
@@ -733,15 +749,20 @@ async function bootstrap() {
       setFace(msg.approved ? 'smug' : 'aside');
       capri.playAct(msg.approved ? 'hop' : 'flinch');
     } else if (type === 'task_done') {
-      // Victory sequence & cut-in
+      // Trigger-style Victory Sequence: hop, cut-in, shards, star audio, mission report
       capri.playAct('victory', capri.facing);
-      fx.showCutin('grin', 1100);
+      fx.showCutin('grin', 1200);
+      fx.burst(capri.pos.x, capri.pos.y - 120, { count: 36, power: 1.4 });
       voice.play('done');
 
       panelEl.hidden = false;
       panelBadge.textContent = 'VICTORY';
       panelBadge.className = 'panel__badge';
-      decodeText(`Задача выполнена!\n${msg.last_sentence}`, () => voice.play('blip'));
+      const actionsCount = msg.actions ?? 1;
+      const filesCount = msg.files_changed ?? 0;
+      const durationSec = ((msg.duration_ms || 1000) / 1000).toFixed(1);
+      const report = `★ ЗАДАЧА ВЫПОЛНЕНА ★\n⚡ Действий: ${actionsCount} | 📁 Файлов: ${filesCount} | ⏱ ${durationSec}с\n\n${msg.last_sentence || 'Все операции завершены успешно.'}`;
+      decodeText(report, () => voice.play('star', { soft: true }));
       setFace('laugh');
       updatePanelPosition();
     } else if (type === 'listening_start') {

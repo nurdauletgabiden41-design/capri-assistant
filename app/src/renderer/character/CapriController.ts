@@ -282,6 +282,21 @@ export class CapriController {
     }
   }
 
+  public glitch(amount: number = 0.5, durationMs: number = 300): void {
+    this.state.glitch = amount;
+    this.state.glitchSeed = Math.random() * 100;
+    setTimeout(() => {
+      this.state.glitch = 0;
+    }, durationMs);
+  }
+
+  public misreg(offset: [number, number] = [4, -2], durationMs: number = 300): void {
+    this.state.misreg = offset;
+    setTimeout(() => {
+      this.state.misreg = [0, 0];
+    }, durationMs);
+  }
+
   // --- Falling Mechanics ---
 
   public fall(): void {

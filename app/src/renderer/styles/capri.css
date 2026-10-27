@@ -131,6 +131,13 @@ html, body {
   box-shadow: 4px 4px 0 var(--red);
 }
 
+#ticker.is-deep-thinking {
+  color: var(--red);
+  border-color: var(--magenta);
+  box-shadow: 4px 4px 0 var(--violet);
+  animation: pulse-red 0.6s infinite alternate;
+}
+
 /* Transmission Panel */
 #panel {
   position: absolute;
