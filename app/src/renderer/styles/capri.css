@@ -336,6 +336,120 @@ html, body {
   box-shadow: 0 0 4px var(--green);
 }
 
+/* Settings Modal */
+.settings-modal {
+  position: absolute;
+  z-index: 25;
+  width: 360px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--ink);
+  border: 1px solid var(--violet);
+  box-shadow: 8px 8px 0 var(--violet), 0 0 20px rgba(123, 61, 255, 0.4);
+  padding: 14px;
+  font-family: var(--font-display);
+  color: var(--paper);
+  pointer-events: auto;
+}
+
+.settings-modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--violet);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.settings-modal__title {
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.settings-modal__close {
+  background: transparent;
+  border: none;
+  color: var(--paper-2);
+  cursor: pointer;
+  font-size: 14px;
+}
+.settings-modal__close:hover {
+  color: var(--red);
+}
+
+.settings-field {
+  margin-bottom: 10px;
+}
+
+.settings-field label {
+  display: block;
+  font-size: 11px;
+  color: var(--paper-2);
+  margin-bottom: 4px;
+  font-family: var(--font-mono);
+}
+
+.settings-input {
+  width: 100%;
+  background: #0d0a14;
+  border: 1px solid var(--violet);
+  color: var(--paper);
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+  box-sizing: border-box;
+}
+.settings-input:focus {
+  border-color: var(--green);
+}
+
+.settings-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-slider-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--green);
+}
+.settings-slider-row span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  width: 36px;
+  text-align: right;
+  color: var(--cyan);
+}
+
+.settings-row-check {
+  display: flex;
+  gap: 16px;
+  margin: 10px 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.settings-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+  border-top: 1px solid rgba(123, 61, 255, 0.3);
+  padding-top: 10px;
+}
+
+.btn-save {
+  background: var(--green);
+  color: var(--ink);
+  font-weight: 700;
+}
+.btn-save:hover {
+  background: #2fe06b;
+}
+
 /* Offline Banner */
 #offline-banner {
   position: absolute;

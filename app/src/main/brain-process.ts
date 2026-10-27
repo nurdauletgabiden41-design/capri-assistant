@@ -20,24 +20,47 @@ export class BrainProcessManager {
     this.projectRoot = projectRoot || path.resolve(app.getAppPath());
   }
 
-  private findPythonPath(): string {
+  private findExecutable(): { bin: string; args: string[]; cwd: string } {
+    // 1. Packaged distribution: brain.exe in resources/brain
+    if (app.isPackaged) {
+      const packagedExe = path.join(process.resourcesPath, 'brain', 'brain.exe');
+      if (fs.existsSync(packagedExe)) {
+        return { bin: packagedExe, args: [], cwd: path.dirname(packagedExe) };
+      }
+    }
+
+    // 2. Local standalone build: brain/dist/brain/brain.exe
+    const distExe = path.join(this.projectRoot, 'brain', 'dist', 'brain', 'brain.exe');
+    if (fs.existsSync(distExe)) {
+      return { bin: distExe, args: [], cwd: path.dirname(distExe) };
+    }
+
+    // 3. Local virtualenv Python
     const venvWin = path.join(this.projectRoot, '.venv', 'Scripts', 'python.exe');
-    if (fs.existsSync(venvWin)) return venvWin;
+    const scriptPath = path.join(this.projectRoot, 'brain', 'main.py');
+    if (fs.existsSync(venvWin)) {
+      return { bin: venvWin, args: ['-u', scriptPath], cwd: this.projectRoot };
+    }
 
     const venvUnix = path.join(this.projectRoot, '.venv', 'bin', 'python');
-    if (fs.existsSync(venvUnix)) return venvUnix;
+    if (fs.existsSync(venvUnix)) {
+      return { bin: venvUnix, args: ['-u', scriptPath], cwd: this.projectRoot };
+    }
 
-    return process.platform === 'win32' ? 'python.exe' : 'python3';
+    return {
+      bin: process.platform === 'win32' ? 'python.exe' : 'python3',
+      args: ['-u', scriptPath],
+      cwd: this.projectRoot,
+    };
   }
 
   public start(): void {
     if (this.child || this.isStopping) return;
 
-    const pythonBin = this.findPythonPath();
-    const scriptPath = path.join(this.projectRoot, 'brain', 'main.py');
+    const { bin, args, cwd } = this.findExecutable();
     const logDir = path.join(app.getPath('appData'), 'Capri', 'logs');
 
-    logger.info(`[brain-process] Launching ${pythonBin} with ${scriptPath}...`);
+    logger.info(`[brain-process] Launching ${bin} (args: ${args.join(' ')})...`);
 
     const env = {
       ...process.env,
@@ -49,8 +72,8 @@ export class BrainProcessManager {
     };
 
     try {
-      this.child = spawn(pythonBin, ['-u', scriptPath], {
-        cwd: this.projectRoot,
+      this.child = spawn(bin, args, {
+        cwd,
         env,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,

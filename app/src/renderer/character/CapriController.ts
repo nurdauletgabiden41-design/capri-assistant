@@ -48,6 +48,9 @@ export class CapriController {
   public isBusy = false;
   public wander = true;
   public zapEnabled = true;
+  public reduceMotion = false;
+  private glitchTimestamps: number[] = [];
+  private lastGlitchTime = 0;
 
   public windows: WindowData = { fg: 0, wins: [] };
 
@@ -283,6 +286,27 @@ export class CapriController {
   }
 
   public glitch(amount: number = 0.5, durationMs: number = 300): void {
+    const now = performance.now();
+    // WCAG 2.3.1: Zero flashing faster than 3 times per second (min interval 350ms)
+    if (now - this.lastGlitchTime < 350) return;
+
+    // Filter glitch events within the last 60 seconds
+    this.glitchTimestamps = this.glitchTimestamps.filter((t) => now - t < 60000);
+    if (this.reduceMotion && this.glitchTimestamps.length >= 3) {
+      // Max 3 glitches per minute in reduced motion mode
+      return;
+    }
+
+    this.lastGlitchTime = now;
+    this.glitchTimestamps.push(now);
+
+    if (this.reduceMotion) {
+      this.canvas.style.opacity = '0.75';
+      setTimeout(() => {
+        this.canvas.style.opacity = '1.0';
+      }, durationMs);
+      return;
+    }
     this.state.glitch = amount;
     this.state.glitchSeed = Math.random() * 100;
     setTimeout(() => {
@@ -291,6 +315,7 @@ export class CapriController {
   }
 
   public misreg(offset: [number, number] = [4, -2], durationMs: number = 300): void {
+    if (this.reduceMotion) return;
     this.state.misreg = offset;
     setTimeout(() => {
       this.state.misreg = [0, 0];

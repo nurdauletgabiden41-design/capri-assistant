@@ -116,6 +116,21 @@ async function bootstrap() {
   const panelWave = document.getElementById('panel-wave') as HTMLDivElement | null;
   const waveBars = panelWave?.querySelectorAll('.panel__wave-bar') as NodeListOf<HTMLDivElement> | null;
 
+  const settingsModal = document.getElementById('settings-modal') as HTMLDivElement;
+  const settingsClose = document.getElementById('settings-close') as HTMLButtonElement;
+  const settingModel = document.getElementById('setting-model') as HTMLSelectElement;
+  const settingBudget = document.getElementById('setting-budget') as HTMLInputElement;
+  const settingMotion = document.getElementById('setting-motion') as HTMLSelectElement;
+  const settingScale = document.getElementById('setting-scale') as HTMLInputElement;
+  const settingScaleVal = document.getElementById('setting-scale-val') as HTMLSpanElement;
+  const settingVolume = document.getElementById('setting-volume') as HTMLInputElement;
+  const settingVolumeVal = document.getElementById('setting-volume-val') as HTMLSpanElement;
+  const settingVoice = document.getElementById('setting-voice') as HTMLInputElement;
+  const settingMute = document.getElementById('setting-mute') as HTMLInputElement;
+  const settingKey = document.getElementById('setting-key') as HTMLInputElement;
+  const settingsSave = document.getElementById('settings-save') as HTMLButtonElement;
+  const settingsCancel = document.getElementById('settings-cancel') as HTMLButtonElement;
+
   let currentAudio: HTMLAudioElement | null = null;
 
   // 1. Initialize FX & Chip
@@ -153,6 +168,10 @@ async function bootstrap() {
   // 4. Initialize WebGL Capri Controller
   const capri = new CapriController(capriEl, canvasEl, textureSource, fx, voice);
 
+  const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const isReducedMotion = cfg.motion === 'reduced' || (cfg.motion === 'auto' && prefersReduced);
+  capri.reduceMotion = isReducedMotion;
+  fx.reduceMotion = isReducedMotion;
   capri.setScale(cfg.scale || 0.6);
   capri.wander = cfg.wander ?? true;
 
@@ -255,15 +274,21 @@ async function bootstrap() {
       onMenu = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
     }
 
+    let onSettings = false;
+    if (!settingsModal.hidden) {
+      const r = settingsModal.getBoundingClientRect();
+      onSettings = x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+    }
+
     const onChip = chip.contains(x, y);
     const onCapri = capri.hitTest(x, y);
 
-    const hit = onPanel || onMenu || onChip || onCapri;
+    const hit = onPanel || onMenu || onChip || onCapri || onSettings;
     setInteractive(hit);
 
     // Adaptive polling: 30 Hz when near, 5 Hz when far
     const dist = Math.hypot(x - capri.pos.x, y - (capri.pos.y - 200));
-    host.setNearTarget(dist < 260 || onPanel || onMenu || onChip);
+    host.setNearTarget(dist < 260 || onPanel || onMenu || onChip || onSettings);
   }
 
   function setInteractive(on: boolean) {
@@ -447,14 +472,99 @@ async function bootstrap() {
       panelEl.hidden = false;
       chatInput.focus();
     } else if (action === 'settings') {
-      voice.play('tick');
-      panelEl.hidden = false;
-      decodeText('Конфигурация Capri: %APPDATA%\\Capri\\config.json', () => voice.play('blip'));
-      setFace('look');
-      updatePanelPosition();
+      openSettings();
     } else if (action === 'quit') {
       host.quit();
     }
+  });
+
+  async function openSettings() {
+    voice.play('tick');
+    const c = await host.getConfig();
+    settingModel.value = c.model || 'anthropic/claude-haiku-5.5';
+    settingBudget.value = String(c.dailyBudgetUsd ?? 0.50);
+    settingMotion.value = c.motion || 'auto';
+    settingScale.value = String(c.scale ?? 0.6);
+    settingScaleVal.textContent = `${c.scale ?? 0.6}x`;
+    settingVolume.value = String(c.volume ?? 0.7);
+    settingVolumeVal.textContent = `${Math.round((c.volume ?? 0.7) * 100)}%`;
+    settingVoice.checked = Boolean(c.voiceEnabled ?? true);
+    settingMute.checked = Boolean(c.muted);
+    settingKey.value = '';
+
+    settingsModal.hidden = false;
+    host.setNearTarget(true);
+  }
+
+  function closeSettings() {
+    settingsModal.hidden = true;
+    host.setFocus(false);
+  }
+
+  settingsClose.addEventListener('click', closeSettings);
+  settingsCancel.addEventListener('click', closeSettings);
+
+  settingScale.addEventListener('input', () => {
+    const s = parseFloat(settingScale.value);
+    settingScaleVal.textContent = `${s.toFixed(2)}x`;
+    capri.setScale(s);
+  });
+
+  settingVolume.addEventListener('input', () => {
+    const v = parseFloat(settingVolume.value);
+    settingVolumeVal.textContent = `${Math.round(v * 100)}%`;
+    voice.configure({ volume: v });
+  });
+
+  settingMute.addEventListener('change', () => {
+    voice.configure({ muted: settingMute.checked });
+  });
+
+  [settingBudget, settingKey].forEach((el) => {
+    el.addEventListener('focus', () => host.setFocus(true));
+    el.addEventListener('blur', () => host.setFocus(false));
+  });
+
+  settingsSave.addEventListener('click', async () => {
+    const s = parseFloat(settingScale.value);
+    const v = parseFloat(settingVolume.value);
+    const b = parseFloat(settingBudget.value) || 0.50;
+    const m = settingModel.value;
+    const mot = settingMotion.value as 'auto' | 'full' | 'reduced';
+    const vc = settingVoice.checked;
+    const mu = settingMute.checked;
+    const key = settingKey.value.trim();
+
+    await host.setConfig({
+      scale: s,
+      volume: v,
+      dailyBudgetUsd: b,
+      model: m,
+      motion: mot,
+      voiceEnabled: vc,
+      muted: mu,
+    });
+
+    const isReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const isReducedMotion = mot === 'reduced' || (mot === 'auto' && isReduced);
+    capri.reduceMotion = isReducedMotion;
+    fx.reduceMotion = isReducedMotion;
+
+    host.sendToBrain({
+      type: 'settings_update',
+      settings: {
+        model: m,
+        daily_budget_usd: b,
+        voice_enabled: vc,
+      },
+    });
+
+    if (key) {
+      host.sendToBrain({ type: 'user_text', text: `key ${key}` });
+    }
+
+    voice.play('done');
+    closeSettings();
   });
 
   // Focus management
@@ -616,6 +726,8 @@ async function bootstrap() {
       }
     } else if (cmd.name === 'teleport') {
       capri.playAct('hop');
+    } else if (cmd.name === 'open-settings') {
+      openSettings();
     }
   });
 

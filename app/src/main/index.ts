@@ -107,7 +107,13 @@ if (!gotTheLock) {
     // Check for --demo or --capture flags
     const captureArg = process.argv.find((a) => a.startsWith('--capture'));
     if (process.argv.includes('--demo') || captureArg) {
-      setTimeout(() => triggerDemo(), 1500);
+      setTimeout(() => {
+        if (captureArg && captureArg.includes('settings')) {
+          overlay?.window?.webContents.send('capri:command', { name: 'open-settings' });
+        } else {
+          triggerDemo();
+        }
+      }, 1500);
     }
 
     if (captureArg) {

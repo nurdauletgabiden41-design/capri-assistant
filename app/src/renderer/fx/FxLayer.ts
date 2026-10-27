@@ -86,6 +86,7 @@ const GLYPHS = ['01', '10', '▚', '▞', '◢', '◣', '>_', '{}', '#', '⌁', 
 export class FxLayer {
   public canvas: HTMLCanvasElement;
   public ctx: CanvasRenderingContext2D;
+  public reduceMotion: boolean = false;
   private cutinImages: Record<string, HTMLImageElement> = {};
   private activeCutin: { name: string; until: number } | null = null;
   private items: FxItem[] = [];
@@ -166,6 +167,7 @@ export class FxLayer {
     to: FxPoint | (() => FxPoint),
     opts: { life?: number; forks?: number; width?: number } = {}
   ): void {
+    if (this.reduceMotion) return; // Skip strobe lightning in reduced motion mode
     const life = opts.life ?? 240;
     const width = opts.width ?? 3;
     const forksCount = opts.forks ?? 2;
@@ -436,18 +438,20 @@ export class FxLayer {
     const w = window.innerWidth;
     const h = window.innerHeight;
 
-    // Draw manga speedlines across screen
-    this.ctx.save();
-    this.ctx.strokeStyle = '#ff2152';
-    this.ctx.lineWidth = 2;
-    for (let i = 0; i < 12; i++) {
-      const y = (now * 0.2 + i * 70) % h;
-      this.ctx.beginPath();
-      this.ctx.moveTo(w * 0.3, y);
-      this.ctx.lineTo(w * 0.7, y + (i % 2 === 0 ? 10 : -10));
-      this.ctx.stroke();
+    // Draw manga speedlines across screen if motion is not reduced
+    if (!this.reduceMotion) {
+      this.ctx.save();
+      this.ctx.strokeStyle = '#ff2152';
+      this.ctx.lineWidth = 2;
+      for (let i = 0; i < 12; i++) {
+        const y = (now * 0.2 + i * 70) % h;
+        this.ctx.beginPath();
+        this.ctx.moveTo(w * 0.3, y);
+        this.ctx.lineTo(w * 0.7, y + (i % 2 === 0 ? 10 : -10));
+        this.ctx.stroke();
+      }
+      this.ctx.restore();
     }
-    this.ctx.restore();
 
     // Draw cutin banner
     const cutinW = 360;

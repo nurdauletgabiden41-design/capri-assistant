@@ -65,7 +65,7 @@ This checklist must be verified at the end of each development stage before crea
 
 - [x] **Cel Animation Feel:** Poses step cleanly according to exposure sheets (`acting.js`); no unintentional linear lerp or easing applied to character body drawings.
 - [x] **Line Boil:** Subtle line boil active on twos without distracting jitter.
-- [ ] **Reduce Motion Mode:**
+- [x] **Reduce Motion Mode:**
   - Follows Windows "Animation effects" accessibility setting automatically.
   - Manual toggle available in menu.
   - When enabled, high-frequency glitch, screen shake, and impact flashes are replaced with smooth opacity fades.
@@ -83,3 +83,17 @@ This checklist must be verified at the end of each development stage before crea
 - [x] **Prompt Injection Mitigation:** Untrusted file or web content is isolated within data envelopes, instructing the LLM to ignore embedded commands.
 - [x] **Credential Security:** API keys stored exclusively in Windows Credential Manager via `keyring`. Zero plain-text keys in logs, config files, git commits, or IPC messages.
 - [x] **Action Logging:** All executed actions logged to `actions.log` with timestamps, action kind, and status, without recording secrets or sensitive file payloads.
+
+---
+
+## 8. Settings Panel & Distribution Packaging
+
+- [x] **Settings Panel:**
+  - Interactive modal dialog with model selection, daily USD budget limit, motion mode (`auto`, `full`, `reduced`), scale and volume sliders, voice & mute toggles, and OpenRouter API key configuration.
+  - Settings persisted across restarts in `%APPDATA%\Capri\config.json`.
+  - Dynamic live propagation of settings (`daily_budget_usd`, `model`) to Python brain via `settings_update` message.
+- [x] **Standalone Brain Distribution:**
+  - PyInstaller configuration (`brain/brain.spec`) bundles Python 3.12 runtime, faster-whisper, edge-tts, keyring, websockets, and json schemas into standalone `brain.exe`.
+  - Electron main process detects packaged mode and spawns `resources/brain/brain.exe` in production, falling back to local Python `.venv` in development.
+- [x] **Installer Packaging:**
+  - `electron-builder` configuration for Windows NSIS installer with desktop/start-menu shortcuts and custom Capri icon.

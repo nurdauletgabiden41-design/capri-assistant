@@ -8,7 +8,47 @@
     "typecheck": "tsc --noEmit",
     "start": "npm run build && electron .",
     "demo": "npm run build && electron . --demo",
-    "test:brain": ".venv/Scripts/pytest brain"
+    "test:brain": ".venv/Scripts/pytest brain",
+    "build:brain": ".venv/Scripts/pyinstaller --noconfirm brain/brain.spec --distpath brain/dist --workpath brain/build",
+    "dist": "npm run build && npm run build:brain && electron-builder --win",
+    "pack": "npm run build && npm run build:brain && electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.capri.assistant",
+    "productName": "Capri",
+    "copyright": "Copyright © 2026 Capri Project Authors",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "shared/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "brain/dist/brain",
+        "to": "brain",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "app/assets/icons/capri.ico",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Capri Assistant"
+    }
   },
   "keywords": [
     "electron",
@@ -28,6 +68,7 @@
     "@types/node": "^22.10.0",
     "@types/ws": "^8.5.13",
     "electron": "^34.2.0",
+    "electron-builder": "^26.18.0",
     "esbuild": "^0.25.0",
     "typescript": "^5.7.0"
   }

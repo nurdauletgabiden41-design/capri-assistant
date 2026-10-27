@@ -4,12 +4,20 @@ Validates incoming and outgoing WebSocket frames against the schemas in shared/s
 """
 
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import jsonschema
 
-SCHEMAS_DIR = Path(__file__).resolve().parent.parent.parent / "shared" / "schemas"
+if getattr(sys, "frozen", False):
+    _base_dir = Path(getattr(sys, "_MEIPASS", sys.executable)).resolve()
+    SCHEMAS_DIR = _base_dir / "shared" / "schemas"
+    if not SCHEMAS_DIR.exists():
+        SCHEMAS_DIR = Path(sys.executable).resolve().parent / "shared" / "schemas"
+else:
+    SCHEMAS_DIR = Path(__file__).resolve().parent.parent.parent / "shared" / "schemas"
+
 HOST_SCHEMA_FILE = SCHEMAS_DIR / "host_messages.json"
 BRAIN_SCHEMA_FILE = SCHEMAS_DIR / "brain_messages.json"
 

@@ -368,6 +368,18 @@ async def handle_host_message(client: BrainWsClient, msg: dict[str, Any]) -> Non
         approval_gate.cancel_all()
         await client.send({"type": "tts_end"})
 
+    elif msg_type == "settings_update":
+        global DEFAULT_MODEL
+        settings = msg.get("settings", {})
+        logger.info("Applying settings_update from Host: %s", settings)
+        if "daily_budget_usd" in settings:
+            try:
+                budget_tracker.daily_limit_usd = float(settings["daily_budget_usd"])
+            except (ValueError, TypeError):
+                pass
+        if "model" in settings and isinstance(settings["model"], str):
+            DEFAULT_MODEL = settings["model"]
+
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Capri Python Brain")
