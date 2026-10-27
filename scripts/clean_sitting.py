@@ -1,4 +1,4 @@
-﻿import os
+import os
 from PIL import Image
 import numpy as np
 
@@ -27,9 +27,10 @@ is_black_armor = (r < 50) & (g < 50) & (b < 60) & (a > 80)
 # The shadow has low saturation: |r-g| < 30 and |g-b| < 30 and (r < 120)
 is_dull_shadow = (np.abs(r.astype(int) - g.astype(int)) < 30) & (np.abs(g.astype(int) - b.astype(int)) < 30) & (r < 120)
 
-# Zero out dull shadow
+# Zero out dull shadow only in bed region (x < 650, y > 500)
 clean_mask = a > 0
-clean_mask[is_dull_shadow] = False
+bed_region = (np.arange(arr.shape[1])[None, :] < 650) & (np.arange(arr.shape[0])[:, None] > 500)
+clean_mask[is_dull_shadow & bed_region] = False
 
 arr[:,:,3] = np.where(clean_mask, a, 0)
 

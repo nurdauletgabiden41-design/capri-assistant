@@ -455,7 +455,7 @@ async function bootstrap() {
 
     if (mouseDownPos && !capri.isDragging) {
       const dist = Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y);
-      if (dist > 6) {
+      if (dist > 3) {
         capri.isDragging = true;
         dragOffset = {
           x: capri.pos.x - mouseDownPos.x,
@@ -463,6 +463,9 @@ async function bootstrap() {
         };
         closeContextMenu();
         setInteractive(true);
+        if (capri.stance === 'sit' || capri.stance === 'sleep') {
+          capri.setStance('fall');
+        }
       }
     }
 
@@ -506,6 +509,11 @@ async function bootstrap() {
 
       if (capri.hitTest(e.clientX, e.clientY)) {
         mouseDownPos = { x: e.clientX, y: e.clientY };
+        dragOffset = {
+          x: capri.pos.x - e.clientX,
+          y: capri.pos.y - e.clientY,
+        };
+        setInteractive(true);
       }
 
       if (chip.contains(e.clientX, e.clientY)) {

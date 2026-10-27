@@ -24,7 +24,6 @@ export interface WindowData {
 
 const GRAVITY = 2600; // px/s^2
 const MAX_FALL_SPEED = 1900; // px/s
-const THIGH = 73; // hip to knee sprite px
 
 export class CapriController {
   public root: HTMLElement;
@@ -57,6 +56,7 @@ export class CapriController {
   private basePlayer: Player;
   private activeAct: Player | null = null;
   private alphaMap: Uint8ClampedArray | null = null;
+  private sitAlphaMap: Uint8ClampedArray | null = null;
 
   private lastDrawTime = 0;
   private lastActivityTime = performance.now();
@@ -127,11 +127,11 @@ export class CapriController {
     this.voice = voice;
     this.renderer = new SpriteRenderer(canvas, image, sitImage);
     this.basePlayer = new Player('stand');
-    this.buildAlphaMap(image);
+    this.buildAlphaMap(image, sitImage);
     this.setScale(this.scale);
   }
 
-  private buildAlphaMap(source: TexImageSource): void {
+  private buildAlphaMap(source: TexImageSource, sitSource?: TexImageSource): void {
     const { width: w, height: h, mirror } = SPRITE;
     const c = document.createElement('canvas');
     c.width = w;
@@ -139,7 +139,8 @@ export class CapriController {
     const ctx = c.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
-    ctx.drawImage(source as CanvasImageSource, 0, 0);
+    // Draw STANDING sprite scaled to (0, 0, w, h)
+    ctx.drawImage(source as CanvasImageSource, 0, 0, w, h);
     const idata = ctx.getImageData(0, 0, w, h);
     const data = idata.data;
 
@@ -152,6 +153,14 @@ export class CapriController {
       }
     }
     this.alphaMap = data;
+
+    // Build SITTING alpha map if sitSource is provided
+    if (sitSource) {
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(sitSource as CanvasImageSource, 2.5, 0, 231, 232);
+      const sitIdata = ctx.getImageData(0, 0, w, h);
+      this.sitAlphaMap = sitIdata.data;
+    }
   }
 
   public get floor(): number {
@@ -686,6 +695,10 @@ export class CapriController {
     const top = this.pos.y - (SPRITE.pad + SPRITE.feet.y) * s + this.bob;
     this.root.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
 
+    const originX = (SPRITE.pad + SPRITE.feet.x) * s;
+    const originY = (SPRITE.pad + SPRITE.feet.y) * s;
+    this.canvas.style.transformOrigin = `${originX.toFixed(1)}px ${originY.toFixed(1)}px`;
+
     const flipY = this.upside ? -1 : 1;
     this.canvas.style.transform = `rotate(${this.tilt.toFixed(2)}deg) scale(${(this.facing * this.sx).toFixed(3)}, ${(flipY * this.sy).toFixed(3)})`;
     this.onMove?.(this.pos);
@@ -701,7 +714,7 @@ export class CapriController {
     }
 
     // Falling physics update
-    if (this.stance === 'fall') {
+    if (this.stance === 'fall' && !this.isDragging) {
       this.updateFall(now);
       this.place();
       this.renderer.draw(this.state);
@@ -821,18 +834,14 @@ export class CapriController {
   }
 
   public hitTest(screenX: number, screenY: number): boolean {
-    if (this.isStowed || !this.alphaMap) return false;
+    if (this.isStowed) return false;
 
     const s = this.scale;
     const fy = this.pos.y + this.bob;
     const sx = SPRITE.feet.x + ((screenX - this.pos.x) / s) * this.facing;
-    let sy = SPRITE.feet.y - (fy - screenY) / s;
-
-    // Compensate sitting thigh fold
-    if (this.state.sit > 0 && sy > SPRITE.hip) {
-      const c = 0.3;
-      sy = sy <= SPRITE.hip + THIGH * c ? SPRITE.hip + (sy - SPRITE.hip) / c : sy + THIGH * (1 - c);
-    }
+    const sy = this.upside
+      ? SPRITE.feet.y + (fy - screenY) / s
+      : SPRITE.feet.y - (fy - screenY) / s;
 
     const px = Math.round(sx);
     const py = Math.round(sy);
@@ -841,7 +850,38 @@ export class CapriController {
       return false;
     }
 
-    const alpha = this.alphaMap[(py * SPRITE.width + px) * 4 + 3];
-    return alpha > 40;
+    const isSit = this.stance === 'sit';
+    const maxY = isSit ? 236 : 418;
+    if (py > maxY) return false;
+
+    // Fast path: core body bounding box guarantees clickability
+    if (px >= 75 && px <= 165 && py >= 40 && py <= maxY) {
+      return true;
+    }
+
+    const map = isSit && this.sitAlphaMap ? this.sitAlphaMap : this.alphaMap;
+    if (!map) {
+      return px >= 40 && px <= 200 && py >= 10 && py <= maxY;
+    }
+
+    // Direct pixel hit
+    if (map[(py * SPRITE.width + px) * 4 + 3] > 20) {
+      return true;
+    }
+
+    // Neighbor search for thin hair strands, antennae, fingers, outer edges (±6px)
+    for (let dy = -6; dy <= 6; dy += 2) {
+      for (let dx = -6; dx <= 6; dx += 2) {
+        const nx = px + dx;
+        const ny = py + dy;
+        if (nx >= 0 && nx < SPRITE.width && ny >= 0 && ny < SPRITE.height) {
+          if (map[(ny * SPRITE.width + nx) * 4 + 3] > 25) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   }
 }
